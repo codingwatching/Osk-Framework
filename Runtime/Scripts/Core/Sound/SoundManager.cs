@@ -4,6 +4,7 @@ using System.Linq;
 using DG.Tweening;
 using Sirenix.OdinInspector;
 using UnityEngine;
+using UnityEngine.Audio; 
 
 namespace OSK
 {
@@ -166,6 +167,12 @@ namespace OSK
             source.clip = clip;
             source.loop = loop;
 
+            var data = GetSoundInfo(clip);
+            if (data != null && data.mixerGroup != null)
+            {
+                source.outputAudioMixerGroup = data.mixerGroup;
+            }
+            
             pitch ??= new MinMaxFloat(1, 1);
 
             var playing = new PlayingSound
@@ -249,6 +256,30 @@ namespace OSK
                     _parentGroup.gameObject.AddComponent<DontDestroy>().DontDesGOOnLoad();
             }
         } 
+        public void SetMixerVolume(AudioMixer mainMixer, string parameterName, float value)
+        {
+            if (mainMixer == null)
+            {
+                MyLogger.LogWarning("Main Mixer is not assigned in SoundManager.");
+                return;
+            }
+            // Chuyển đổi từ 0.0001-1 sang -80dB đến 0dB
+            // Công thức: dB = 20 * log10(Linear) 
+            float dB = value > 0 ? Mathf.Log10(value) * 20 : -80f;
+            mainMixer.SetFloat(parameterName, dB);
+        }
+        
+        public void SetMixerGroupVolume(AudioMixerGroup mixerGroup, float value)
+        {
+            if (mixerGroup == null || mixerGroup.audioMixer == null)
+            {
+                MyLogger.LogWarning("Mixer Group or its AudioMixer is null.");
+                return;
+            }
+            float dB = value > 0 ? Mathf.Log10(value) * 20 : -80f;
+            mixerGroup.audioMixer.SetFloat(mixerGroup.name + "_Volume", dB);
+        }
+        
         #endregion
     }
 }

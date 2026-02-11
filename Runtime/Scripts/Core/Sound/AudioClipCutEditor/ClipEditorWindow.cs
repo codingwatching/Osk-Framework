@@ -529,17 +529,84 @@ namespace OSK
             GUI.enabled = canOverwrite;
             if (GUILayout.Button("Overwrite Original WAV", GUILayout.Height(28)))
             {
-                // ... (Giữ nguyên logic Save)
-                // Lưu ý: Rút gọn ở đây để hiển thị logic chính, bạn copy lại phần xử lý Save từ code cũ
-            }
+                if (!canOverwrite)
+                {
+                    Debug.LogError("[OSK] Original asset is not a WAV file, cannot overwrite.");
+                }
+                else
+                {
+                    bool ok = EditorUtility.DisplayDialog(
+                        "Overwrite Original WAV?",
+                        $"This will permanently replace:\n\n{assetPath}\n\nAre you sure?",
+                        "Overwrite", "Cancel"
+                    );
 
+                    if (ok)
+                    {
+                        using (var p = new AudioProcessor(src))
+                        {
+                            p.Trim(_clip.StartTime, _clip.EndTime);
+                            p.AdjustVolume(_clip.Volume);
+                            if (_clip.IsReversed) p.Reverse();
+                            if (_clip.ConvertToMono) p.ConvertToMono(_clip.MonoMode);
+                            if (_clip.FadeInDuration > 0f || _clip.FadeOutDuration > 0f)
+                                p.ApplyFading(_clip.FadeInDuration, _clip.FadeOutDuration);
+
+                            AudioClip outClip = p.GetResultClip();
+
+                            // Write directly to original file
+                            if (WavWriter.Save(assetPath, outClip))
+                            {
+                                AssetDatabase.Refresh();
+
+                                // Reload asset
+                                AudioClip newClip = AssetDatabase.LoadAssetAtPath<AudioClip>(assetPath);
+                                _clip = new OSKAudioClip(newClip);
+
+                                // Ping the asset in Project window
+                                EditorGUIUtility.PingObject(newClip);
+
+                                Debug.Log($"[OSK] Overwritten original file: {assetPath}");
+                            }
+                        }
+                    }
+                }
+            }
             GUI.enabled = true;
+
             GUILayout.Space(10);
             if (GUILayout.Button("Save Trimmed As WAV", GUILayout.Height(28)))
             {
-                // ... (Giữ nguyên logic Save As)
-            }
+                if (src == null) return;
 
+                string path = EditorUtility.SaveFilePanelInProject(
+                    "Save trimmed audio", 
+                    src.name + "_trimmed", 
+                    "wav",
+                    ""
+                );
+                if (string.IsNullOrEmpty(path)) return;
+
+                using (var p = new AudioProcessor(src))
+                {
+                    p.Trim(_clip.StartTime, _clip.EndTime);
+                    p.AdjustVolume(_clip.Volume);
+                    if (_clip.IsReversed) p.Reverse();
+                    if (_clip.ConvertToMono) p.ConvertToMono(_clip.MonoMode);
+                    if (_clip.FadeInDuration > 0f || _clip.FadeOutDuration > 0f)
+                        p.ApplyFading(_clip.FadeInDuration, _clip.FadeOutDuration);
+
+                    AudioClip outClip = p.GetResultClip();
+                    if (WavWriter.Save(path, outClip))
+                    {
+                        AssetDatabase.Refresh();
+                        var newClip = AssetDatabase.LoadAssetAtPath<AudioClip>(path);
+
+                        EditorGUIUtility.PingObject(newClip);
+                        Debug.Log($"Saved new clip: {path}");
+                    }
+                }
+            }
             EditorGUILayout.EndHorizontal();
         }
 

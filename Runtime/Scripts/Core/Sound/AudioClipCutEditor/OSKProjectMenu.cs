@@ -5,10 +5,9 @@ using UnityEngine;
 namespace OSK
 {
     public static class OSKProjectMenu
-    {
-        private const string MenuPath = "Assets/Open in OSK Audio Editor";
+    { 
 
-        [MenuItem(MenuPath, true)]
+        [MenuItem("Assets/OSK Audio Editor",true)]
         private static bool ValidateOpenInEditor()
         {
             // enable only when single AudioClip selected
@@ -16,7 +15,12 @@ namespace OSK
             return Selection.activeObject is AudioClip;
         }
 
-        [MenuItem(MenuPath)]
+        [MenuItem("Assets/OSK Audio Editor")]
+        public static void OpenAssetInEditor()
+        {
+            OpenInEditor(false);
+        }
+        
         public static void OpenInEditor(bool isOpenEditor = false)
         {
             var clip = Selection.activeObject as AudioClip;

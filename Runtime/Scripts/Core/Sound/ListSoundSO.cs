@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Sirenix.OdinInspector;
 using UnityEngine;
+using UnityEngine.Audio;
 
 namespace OSK
 {
@@ -31,8 +32,14 @@ namespace OSK
         [TableList, SerializeField] 
         private List<SoundData> _listSoundInfos = new List<SoundData>();
         public List<SoundData> ListSoundInfos => _listSoundInfos;
+        
+        [Title("Mixer Settings")]
+        public AudioMixer mainMixer;
+        public bool showMixerSettings = true;
+        public List<AudioMixerGroup> availableMixerGroups = new List<AudioMixerGroup>();
 
-
+        public List<string> groupNames = new List<string>() { "Music", "UI", "Default" };
+        
 #if UNITY_EDITOR 
         private void OnValidate()
         {

@@ -1,18 +1,20 @@
 using System;
+using Sirenix.OdinInspector;
 using UnityEngine;
+using UnityEngine.Audio;
 
 namespace OSK
 {
     [Serializable]
     public class SoundData
     {
+        public string group = "Default";
         public string id = "";
         public AudioClip audioClip;
         public SoundType type = SoundType.SFX;
-        
+        public AudioMixerGroup mixerGroup;        
         [Range(0, 1)] public float volume = 1;
         public MinMaxFloat pitch =  new MinMaxFloat(1, 1);
-        public string group = "Default";
 
 
 #if UNITY_EDITOR

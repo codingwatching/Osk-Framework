@@ -8,7 +8,7 @@ namespace OSK
     public class PoolConfig : MonoBehaviour 
     {
         [Title("Pool Preload Configuration")]
-        [ListDrawerSettings(Expanded = true, DraggableItems = true, ShowIndexLabels = true, ShowFoldout =  true)]
+        [ListDrawerSettings(ShowFoldout = true, DraggableItems = true, ShowIndexLabels = true)]
         [TableList]
         public List<PoolGroupData> Groups = new();
 

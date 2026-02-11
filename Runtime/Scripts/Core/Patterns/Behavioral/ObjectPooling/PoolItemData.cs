@@ -1,6 +1,8 @@
+using System;
 using UnityEngine;
 using Sirenix.OdinInspector;
 using System.Collections.Generic;
+using Object = UnityEngine.Object;
 
 namespace OSK
 {
@@ -38,13 +40,13 @@ namespace OSK
         public LimitMode LimitMode = LimitMode.RecycleOldest; 
     }
 
-    [System.Serializable]
+    [System.Serializable] 
     public class PoolGroupData
     {
         [TitleGroup("$GroupName")]
         public string GroupName;
 
-        [ListDrawerSettings(Expanded = true, DraggableItems = true, ShowIndexLabels = false)]
+        [ListDrawerSettings(ShowFoldout = true, DraggableItems = true, ShowIndexLabels = false)]
         public List<PoolItemData> Pools = new();
     }
 }

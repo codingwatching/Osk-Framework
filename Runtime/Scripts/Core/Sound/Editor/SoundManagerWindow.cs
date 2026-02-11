@@ -113,30 +113,15 @@ namespace OSK
                     if (listSoundSo.groupNames == null || listSoundSo.groupNames.Count == 0)
                         listSoundSo.groupNames = new List<string>() { "Default" };
 
-                    IEnumerable<string> groups;
-                    if (selectedGroup == null)
-                    {
-                        groups = listSoundSo.ListSoundInfos
-                            .Select(x => string.IsNullOrEmpty(x.group) ? "Default" : x.group)
-                            .Distinct()
-                            .OrderBy(x => x);
-                    }
-                    else
-                    {
-                        groups = new List<string> { selectedGroup };
-                    }
-
                     // --- MIXER CONFIGURATION SECTION ---
                     EditorGUILayout.BeginVertical("box");
                     listSoundSo.showMixerSettings = EditorGUILayout.Foldout(listSoundSo.showMixerSettings, "Mixer Configuration", true, EditorStyles.foldoutHeader);
-
                     if (listSoundSo.showMixerSettings)
                     {
                         EditorGUI.indentLevel++;
 
                         EditorGUILayout.BeginHorizontal();
                         listSoundSo.mainMixer = (AudioMixer)EditorGUILayout.ObjectField("Main Mixer", listSoundSo.mainMixer, typeof(AudioMixer), false, GUILayout.Width(400));
-
                         if (listSoundSo.mainMixer != null)
                         {
                             GUI.color = Color.cyan;
@@ -154,7 +139,6 @@ namespace OSK
 
                             GUI.color = Color.white;
                         }
-
                         EditorGUILayout.EndHorizontal();
 
                         if (listSoundSo.mainMixer == null)
@@ -187,7 +171,6 @@ namespace OSK
 
                         EditorGUI.indentLevel--;
                     }
-
                     EditorGUILayout.EndVertical();
 
                     EditorGUILayout.Space(10);
@@ -214,8 +197,6 @@ namespace OSK
                     foreach (var group in activeGroups)
                     {
                         if (!groupFoldouts.ContainsKey(group)) groupFoldouts[group] = true;
-
-                        // HIỂN THỊ HEADER GROUP (Tính năng 2: Đổi màu theo Group)
                         Color headerColor = Color.white;
                         if (group.ToLower().Contains("music")) headerColor = new Color(0.5f, 0.8f, 1f);
                         else if (group.ToLower().Contains("ui")) headerColor = new Color(1f, 0.8f, 0.4f);
@@ -225,7 +206,6 @@ namespace OSK
                         GUI.backgroundColor = Color.white;
 
                         groupFoldouts[group] = EditorGUILayout.Foldout(groupFoldouts[group], $"📂 Group: {group.ToUpper()}", true, EditorStyles.boldLabel);
-
                         if (groupFoldouts[group])
                         {
                             EditorGUI.indentLevel++;
@@ -292,6 +272,7 @@ namespace OSK
                     DrawEnumGenSection();
                 }
             }
+            EditorGUILayout.EndVertical();
         }
 
         private void DrawTableHeader()

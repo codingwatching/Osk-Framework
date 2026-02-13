@@ -272,7 +272,12 @@ namespace OSK
                     DrawEnumGenSection();
                 }
             }
-            EditorGUILayout.EndVertical();
+
+            
+            EditorGUILayout.EndVertical();   
+            EditorGUILayout.EndScrollView();
+            GUILayout.EndVertical();         
+            EditorGUILayout.EndHorizontal();
         }
 
         private void DrawTableHeader()

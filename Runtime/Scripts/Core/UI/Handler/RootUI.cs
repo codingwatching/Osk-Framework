@@ -24,13 +24,12 @@ namespace OSK
         #region Lists & Cache
 
         [BoxGroup("🔍 Views")] [ShowInInspector, ReadOnly]
-        public List<View> ListViewInit { get; private set; } = new();
+        public List<View> ListViewInit { get; set; } = new();
 
         [BoxGroup("🔍 Views")] [ShowInInspector, ReadOnly]
-        public List<View> ListCacheView { get; private set; } = new();
+        public List<View> ListCacheView { get; set; } = new();
 
-        [HideInInspector]
-        public Stack<View> ListViewHistory { get; private set; } = new();
+        public Stack<View> ListViewHistory { get; set; } = new();
 
         [ShowInInspector, ReadOnly]
         private List<QueuedView> _queuedViews = new();
@@ -536,16 +535,23 @@ namespace OSK
 
         public void HideIgnore<T>(T[] viewsToKeep) where T : View
         {
-            foreach (var view in ListCacheView.ToList())
+            HashSet<T> keepSet = viewsToKeep != null  ? new HashSet<T>(viewsToKeep) : null;
+
+            for (int i = ListCacheView.Count - 1; i >= 0; i--)
             {
-                if (view == null)
+                var view = ListCacheView[i];
+
+                if (!view)
                 {
-                    MyLogger.Log($"[View] {nameof(view)}  is null in HideIgnore");
+                    MyLogger.Log("[View] Null found in HideIgnore -> removing");
+                    ListCacheView.RemoveAt(i);
                     continue;
                 }
 
-                if (view is not T tView || viewsToKeep.Contains(tView)) continue;
                 if (!view.IsShowing) continue;
+
+                if (keepSet != null && view is T tView && keepSet.Contains(tView))
+                    continue;
 
                 try
                 {
@@ -553,32 +559,41 @@ namespace OSK
                 }
                 catch (Exception ex)
                 {
-                    MyLogger.LogError($"[View] Error hiding view {view.name}: {ex.Message}");
+                    MyLogger.LogError($"[View] Error hiding {view.name}: {ex}");
                 }
             }
         }
 
+
         public void HideAll()
         {
-            var views = ListCacheView.Where(view => view.IsShowing).ToList();
-            foreach (var view in views)
+            for (int i = ListCacheView.Count - 1; i >= 0; i--)
             {
-                if (view == null)
+                var view = ListCacheView[i];
+
+                if (!view)
                 {
-                    MyLogger.LogError($"[View] {nameof(view)} is null in HideAll");
-                    ListCacheView.Remove(view);
+                    MyLogger.LogError("[View] Null found in HideAll -> removing");
+                    ListCacheView.RemoveAt(i);
                     continue;
                 }
-
+                if (!view.IsShowing) continue;
                 try
                 {
                     view.Hide();
                 }
                 catch (Exception ex)
                 {
-                    MyLogger.LogError($"[View] Error hiding view: {ex.Message}");
+                    MyLogger.LogError($"[View] Error hiding {view.name}: {ex}");
                 }
             }
+        }
+        
+        public void CleanNull()
+        {
+            for (int i = ListCacheView.Count - 1; i >= 0; i--)
+                if (!ListCacheView[i])
+                    ListCacheView.RemoveAt(i);
         }
 
         #endregion
@@ -623,6 +638,9 @@ namespace OSK
                     MyLogger.LogWarning($"[View] {nameof(curView)} null view");
                     continue;
                 }
+                
+                if (!curView.IsShowing) 
+                    continue;
 
                 try
                 {

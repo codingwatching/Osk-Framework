@@ -6,17 +6,26 @@ using Object = UnityEngine.Object;
 
 namespace OSK
 {
+    /// <summary>
+    /// Load ngay lập tức (Mặc định)
+    /// Load rải rác mỗi frame (Đỡ lag khi start game)
+    /// Khi nào dùng mới load
+    /// </summary>
     public enum PreloadMode
     {
-        Immediate,      // Load ngay lập tức (Mặc định)
-        Spread,         // Load rải rác mỗi frame (Đỡ lag khi start game)
-        Lazy            // Khi nào dùng mới load
+        Immediate,    
+        Spread,       
+        Lazy          
     }
     
+    /// <summary>
+    /// Đủ số lượng -> Xóa cái cũ nhất đi dùng lại (Tối ưu cho Effect/Bullet)
+    /// Đủ số lượng -> Không cho sinh thêm (Dùng cho Item giới hạn)
+    /// </summary>
     public enum LimitMode
     {
-        RecycleOldest,  // Đủ số lượng -> Xóa cái cũ nhất đi dùng lại (Tối ưu cho Effect/Bullet)
-        RejectNew       // Đủ số lượng -> Không cho sinh thêm (Dùng cho Item giới hạn)
+        RecycleOldest,  
+        RejectNew       
     }
 
     [System.Serializable]

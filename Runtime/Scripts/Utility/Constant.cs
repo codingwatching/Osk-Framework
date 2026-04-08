@@ -7,6 +7,9 @@ namespace OSK
         public const string KEY_POOL_DEFAULT_CONTAINER = "PoolDefaultContainer";
         public const string KEY_AUDIO_SOUND = "AudioSoundPoolContainer";
         public const string KEY_UI_EFFECT = "UIEffectPoolContainer";
+        
+        public const string KEY_UI_ALERT = "AlertUIPoolContainer";
+        
     }
     
     public class KEY_OBSERVER

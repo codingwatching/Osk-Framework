@@ -188,10 +188,10 @@ namespace OSK
             return _view;
         }
 
-        public T SpawnAlert<T>(T view) where T : View
+        public T SpawnAlert<T>(T view, bool usePool) where T : View
         {
-            var _view = Instantiate(view, _viewContainer);
-            _view.gameObject.SetActive(false);
+            T _view = usePool ? Main.Pool.Spawn<T>(KEY_POOL.KEY_UI_ALERT, view, _viewContainer) : Instantiate(view, _viewContainer);
+            _view.gameObject.SetActive(true);
             _view.Initialize(this);
 
             _view.transform.localPosition = Vector3.zero;
@@ -408,7 +408,7 @@ namespace OSK
                 return null;
             }
 
-            var view = SpawnAlert(viewPrefab);
+            var view = SpawnAlert(viewPrefab, setup.usePool);
             view.Open(new object[] { setup });
             MyLogger.Log($"[View] Opened view: {view.name}");
             return view;

@@ -6,7 +6,7 @@ using Sirenix.OdinInspector;
 
 namespace OSK
 {
-    public class View : MonoBehaviour
+    public abstract class View : MonoBehaviour
     {
         public event Action<object[]> OnDataChanged;
 
@@ -82,9 +82,12 @@ namespace OSK
         [ToggleLeft]
         public bool isRemoveOnHide = false;
 
+        /// <summary>
+        /// isInitOnScene = true if spawn in scene 
+        /// </summary>
         [ReadOnly]
         [ToggleLeft]
-        public bool isInitOnScene;
+        public bool isInitOnScene; 
 
 
         [ShowInInspector, ReadOnly]
@@ -147,7 +150,7 @@ namespace OSK
 #endif
         }
 
-        public virtual void Initialize(RootUI rootUI)
+        public void Initialize(RootUI rootUI)
         {
             if (isInitOnScene) return;
 
@@ -164,6 +167,9 @@ namespace OSK
             }
             SortHierarchyByDepth();
         }
+
+        protected virtual void Awake() => OnInit();
+        protected abstract void OnInit(); // setting, get set component data ..... 
 
         public virtual void Open(object[] data = null)
         {

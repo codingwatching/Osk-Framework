@@ -8,33 +8,45 @@ namespace OSK
 {
     public class AlertView : View
     {
-        public GameObject title; /// Title of the alert (require text in component).
-        public GameObject message;  /// Message of the alert (require text in component).
-        
+        public GameObject title;
+
+        /// Title of the alert (require text in component).
+        public GameObject message;
+
+        /// Message of the alert (require text in component).
         public Button okButton;
+
         public Button cancelButton;
         public float timeHide = 0;
- 
+        public AlertSetup alertSetup;
+
+        protected override void OnInit()
+        {
+        }
+
         protected override void SetData(object[] data)
         {
             base.SetData(data);
-            var setup = data[0] as AlertSetup;
-            if(setup == null)
+            alertSetup = data[0] as AlertSetup;
+            if (alertSetup == null)
             {
-                MyLogger.LogError("AlertView: setup is null. if override this method, remove base.SetData(setup).");
+                MyLogger.LogError(
+                    "AlertView: AlertSetup is null. if override this method, remove base.SetData(setup).");
                 return;
             }
-            SetTile(setup.title);
-            SetMessage(setup.message);
-            SetOkButton(setup.onOk);
-            SetCancelButton(setup.onCancel);
-            SetTimeHide(setup.timeHide);
+
+            SetTile(alertSetup.title);
+            SetMessage(alertSetup.message);
+            SetOkButton(alertSetup.onOk);
+            SetCancelButton(alertSetup.onCancel);
+            SetTimeHide(alertSetup.timeHide);
         }
 
-         
-        protected virtual void SetTile(string _title) =>  SetTextComponent(title, _title, "Title");
-        protected virtual  void SetMessage(string _message) => SetTextComponent(message, _message, "Message");
-        protected virtual  void SetTextComponent(GameObject target, string text, string errorContext)
+
+        protected virtual void SetTile(string _title) => SetTextComponent(title, _title, "Title");
+        protected virtual void SetMessage(string _message) => SetTextComponent(message, _message, "Message");
+
+        protected virtual void SetTextComponent(GameObject target, string text, string errorContext)
         {
             if (string.IsNullOrEmpty(text) || target == null)
                 return;
@@ -53,7 +65,7 @@ namespace OSK
             }
         }
 
-        protected virtual  void SetOkButton(Action onOk)
+        protected virtual void SetOkButton(Action onOk)
         {
             if (onOk == null)
             {
@@ -68,7 +80,7 @@ namespace OSK
             });
         }
 
-        protected virtual  void SetCancelButton(Action onCancel)
+        protected virtual void SetCancelButton(Action onCancel)
         {
             if (onCancel == null)
             {
@@ -96,7 +108,7 @@ namespace OSK
             okButton?.onClick.RemoveAllListeners();
             cancelButton?.onClick.RemoveAllListeners();
         }
-        
+
         protected virtual void OnDestroy()
         {
             okButton?.onClick.RemoveAllListeners();
@@ -106,7 +118,9 @@ namespace OSK
         public virtual void OnClose()
         {
             MyLogger.Log("AlertView: OnClose called. Time hide left " + timeHide);
-            Destroy(gameObject);
+
+            if (alertSetup?.usePool ?? false) Main.Pool.Despawn(this);
+            else Destroy(gameObject);
         }
     }
 }

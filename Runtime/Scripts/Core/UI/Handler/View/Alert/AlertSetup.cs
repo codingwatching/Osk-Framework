@@ -10,5 +10,6 @@ namespace OSK
         public Action onOk = null;
         public Action onCancel = null;
         public float timeHide = 0;
+        public bool usePool = false;
     }
 }

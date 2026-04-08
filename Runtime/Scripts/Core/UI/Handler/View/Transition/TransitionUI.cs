@@ -25,6 +25,19 @@ namespace OSK
         public event Action<float> OnProgress;
         public event Action OnCompleted;
 
+        protected override void OnInit()
+        {
+            if (loadingText == null)
+            {
+                loadingText = GetComponentInChildren<TMP_Text>();
+            }
+
+            if (fillImage == null)
+            {
+                fillImage =   GetComponentInChildren<Image>();
+            }
+        }
+
         public override void Open(object[] data = null)
         {
             base.Open(data);

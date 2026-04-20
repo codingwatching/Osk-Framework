@@ -246,8 +246,7 @@ namespace OSK
             }
  
             var sortedViews = viewsInContainer
-                .OrderBy(v => (int)v.viewType)
-                .ThenBy(v => v.depthEdit) 
+                .OrderBy(v => v.Depth)
                 .ToList();
 
             // 3. Thực thi SetSiblingIndex

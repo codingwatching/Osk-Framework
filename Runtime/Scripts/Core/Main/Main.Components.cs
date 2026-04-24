@@ -180,7 +180,7 @@ namespace OSK
 
         /// <summary>
         /// Tự động tiêm (Inject) các module vào một đối tượng bất kỳ.
-        /// Sử dụng: Main.Instance.Inject(this);
+        /// Sử dụng: Main.Inject(this);
         /// </summary>
         public static void Inject(object target)
         {
@@ -273,7 +273,7 @@ namespace OSK
 
             if (configInit != null)
             {
-                Application.targetFrameRate = configInit.TargetFrameRate > 0 ? configInit.TargetFrameRate : 300;
+                Application.targetFrameRate = configInit.TargetFrameRate;
                 Application.runInBackground = configInit.RunInBackground;
                 Time.timeScale = configInit.GameSpeed;
                 Screen.sleepTimeout = configInit.NeverSleep ? SleepTimeout.NeverSleep : SleepTimeout.SystemSetting;

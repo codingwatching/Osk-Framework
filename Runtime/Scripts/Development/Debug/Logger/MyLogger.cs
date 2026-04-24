@@ -90,35 +90,71 @@ namespace OSK
         public static event OnLogFunc OnLog;
 
         // Basic Logs
-        public static void Log(string message, Object context = null) => FinalLog("Log", message, context);
-        public static void LogWarning(string message, Object context = null) => FinalLog("Warning", message, context);
-        public static void LogError(string message, Object context = null) => FinalLog("Error", message, context);
-        
+        public static void Log(string message, Object context = null)
+        {
+            if (!IsLogEnabled) return;
+            FinalLog("Log", message, context);
+        }
+
+
+        public static void LogWarning(string message, Object context = null)
+        {
+            if (!IsLogEnabled) return;
+            FinalLog("Warning", message, context);
+        }
+
+        public static void LogError(string message, Object context = null)
+        {
+            if (!IsLogEnabled) return;
+            FinalLog("Error", message, context);
+        }
+
         // Conditional Logs
         public static void LogIf(bool condition, string message, Object context = null)
         {
+            if (!IsLogEnabled) return;
+            
             if (condition)
                 FinalLog("Log", message, context);
         }
         public static void LogWarningIf(bool condition, string message, Object context = null)
         {
+            if (!IsLogEnabled) return;
+            
             if (condition)
                 FinalLog("Warning", message, context);
         }
         public static void LogErrorIf(bool condition, string message, Object context = null)
         {
+            if (!IsLogEnabled) return;
+            
             if (condition)
                 FinalLog("Error", message, context);
         }
         
         // Formatted Logs
-        public static void LogFormat(string format, params object[] args) => FinalLog("Log", string.Format(format, args));
-        public static void LogWarningFormat(string format, params object[] args) => FinalLog("Warning", string.Format(format, args));
-        public static void LogErrorFormat(string format, params object[] args) => FinalLog("Error", string.Format(format, args));
-        
+        public static void LogFormat(string format, params object[] args)
+        {
+            if (!IsLogEnabled) return;
+            FinalLog("Log", string.Format(format, args));
+        }
+
+        public static void LogWarningFormat(string format, params object[] args)
+        {
+            if (!IsLogEnabled) return;
+            FinalLog("Warning", string.Format(format, args));
+        }
+
+        public static void LogErrorFormat(string format, params object[] args)
+        {
+            if (!IsLogEnabled) return;
+            FinalLog("Error", string.Format(format, args));
+        }
+
         // JSON Logs
         public static void LogJson(object obj, Object context = null)
         {
+            if (!IsLogEnabled) return;
             string json = JsonUtility.ToJson(obj, true);
             FinalLog("Log", json, context);
         }
@@ -126,13 +162,14 @@ namespace OSK
         // Log newtonsoft 
         public static void LogJsonNewtonsoft(object obj, Object context = null)
         {
+            if (!IsLogEnabled) return;
+            
             string json = Newtonsoft.Json.JsonConvert.SerializeObject(obj, Newtonsoft.Json.Formatting.Indented);
             FinalLog("Log", json, context);
         }
 
-        private static void FinalLog(string level, string message, Object context = null)
+       private static void FinalLog(string level, string message, Object context = null)
         {
-            if (!IsLogEnabled) return;
 
             string className = "Unknown";
             string methodName = "Unknown";

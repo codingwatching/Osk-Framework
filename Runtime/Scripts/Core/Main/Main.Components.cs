@@ -39,21 +39,19 @@ namespace OSK
             if (k_Modules.TryGetValue(typeof(T), out var module))
             {
                 return (T)module;
-            } 
-            throw new Exception($"[OSK Framework] ❌ Module '{typeof(T).Name}' chưa được khởi tạo hoặc chưa được bật trong Main Modules Selection!");
+            }
+
+            throw new Exception(
+                $"[OSK Framework] ❌ Module '{typeof(T).Name}' chưa được khởi tạo hoặc chưa được bật trong Main Modules Selection!");
         }
-        
 
 
-        [HideLabel, InlineProperty]
-        public ConfigInit configInit;
+        [HideLabel, InlineProperty] public ConfigInit configInit;
 
-        [HideLabel, InlineProperty]
-        public MainModules mainModules;
+        [HideLabel, InlineProperty] public MainModules mainModules;
 
-        [Title("🚀 Entry Point")]
-        [TypeFilter("GetProcedureTypes")]
-        [SerializeField] private Type _entranceProcedure;
+        [Title("🚀 Entry Point")] [TypeFilter("GetProcedureTypes")] [SerializeField]
+        private Type _entranceProcedure;
 
         public bool isDestroyingOnLoad = false;
 
@@ -79,28 +77,90 @@ namespace OSK
             InitConfigs();
         }
 
-        private void InitModules()
+        [Title("🛠️ Editor Tools")]
+        [Button(ButtonSizes.Large, Name = "Sync Modules (Hierarchy)")]
+        [InfoBox("Bấm để tự động tạo/cập nhật các Module dựa trên lựa chọn bên dưới vào Hierarchy.",
+            InfoMessageType.None)]
+        public void SyncModules()
         {
-            // 1. Get all module types and sort them by their bit value (priority)
+#if UNITY_EDITOR
+            // 1. Dọn dẹp các Module cũ
+            var children = new List<GameObject>();
+            foreach (Transform child in transform) children.Add(child.gameObject);
+
+            // Chỉ xóa những đối tượng có format tên "số.TênModule" để tránh xóa nhầm các object khác của người dùng
+            foreach (var child in children)
+            {
+                if (System.Text.RegularExpressions.Regex.IsMatch(child.name, @"^\d+\..+"))
+                {
+                    UnityEditor.Undo.DestroyObjectImmediate(child);
+                }
+            }
+
+            // 2. Khởi tạo lại dựa trên modules được chọn
             var moduleValues = (ModuleType[])Enum.GetValues(typeof(ModuleType));
             Array.Sort(moduleValues, (a, b) => ((int)a).CompareTo((int)b));
 
+            int index = 0;
             foreach (ModuleType moduleType in moduleValues)
             {
                 if (moduleType == ModuleType.None || (mainModules.Modules & moduleType) == 0) continue;
 
                 var moduleName = moduleType.ToString();
                 var componentType = mainModules.GetComponentType(moduleName);
-                
+
                 if (componentType != null)
                 {
-                    var newObject = new GameObject($"{(int)moduleType}.{moduleName}");
+                    index++;
+                    var newObject = new GameObject($"{index}.{moduleName}");
                     newObject.transform.SetParent(transform);
-                    
-                    var module = newObject.AddComponent(componentType) as GameFrameworkComponent;
-                    AutoAssignModule(module);
-                    
-                    MyLogger.Log($"[Main] Module {moduleName} initialized and assigned.");
+                    newObject.AddComponent(componentType);
+
+                    UnityEditor.Undo.RegisterCreatedObjectUndo(newObject, "Sync Module " + moduleName);
+                }
+            }
+
+            UnityEditor.EditorUtility.SetDirty(this);
+            Debug.Log("✅ [Main] Modules synchronized successfully in hierarchy.");
+#endif
+        }
+
+        private void InitModules()
+        {
+            // 1. Get all module types and sort them by their bit value (priority)
+            var moduleValues = (ModuleType[])Enum.GetValues(typeof(ModuleType));
+            Array.Sort(moduleValues, (a, b) => ((int)a).CompareTo((int)b));
+            int index = 0;
+            foreach (ModuleType moduleType in moduleValues)
+            {
+                if (moduleType == ModuleType.None || (mainModules.Modules & moduleType) == 0) continue;
+
+                var moduleName = moduleType.ToString();
+                var componentType = mainModules.GetComponentType(moduleName);
+
+                if (componentType != null)
+                {
+                    index++;
+                    var expectedName = $"{index}.{moduleName}";
+                    var child = transform.Find(expectedName);
+                    GameFrameworkComponent module = null;
+
+                    if (child != null)
+                    {
+                        module = child.GetComponent(componentType) as GameFrameworkComponent;
+                        if (module == null)
+                            module = child.gameObject.AddComponent(componentType) as GameFrameworkComponent;
+                        MyLogger.Log($"[Main] Reusing existing module object: {expectedName}");
+                    }
+                    else
+                    {
+                        var newObject = new GameObject(expectedName);
+                        newObject.transform.SetParent(transform);
+                        module = newObject.AddComponent(componentType) as GameFrameworkComponent;
+                        MyLogger.Log($"[Main] Created new module object: {expectedName}");
+                    }
+
+                    if (module != null) AutoAssignModule(module);
                 }
                 else
                 {
@@ -113,7 +173,7 @@ namespace OSK
         {
             var type = module.GetType();
             k_Modules[type] = module;
-            
+
             foreach (var iface in type.GetInterfaces())
                 k_Modules[iface] = module;
         }
@@ -125,8 +185,10 @@ namespace OSK
         public static void Inject(object target)
         {
             if (target == null) return;
-            
-            var fields = target.GetType().GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+            var fields = target.GetType().GetFields(System.Reflection.BindingFlags.Public |
+                                                    System.Reflection.BindingFlags.NonPublic |
+                                                    System.Reflection.BindingFlags.Instance);
             foreach (var field in fields)
             {
                 var attr = field.GetCustomAttributes(typeof(InjectModuleAttribute), true);
@@ -139,7 +201,8 @@ namespace OSK
                     }
                     else
                     {
-                        MyLogger.LogError($"[Inject] Thất bại: Không tìm thấy Module loại '{moduleType.Name}' để tiêm vào {target.GetType().Name}");
+                        MyLogger.LogError(
+                            $"[Inject] Thất bại: Không tìm thấy Module loại '{moduleType.Name}' để tiêm vào {target.GetType().Name}");
                     }
                 }
             }
@@ -159,10 +222,12 @@ namespace OSK
                     {
                         if (GetModule(dep) == null)
                         {
-                            MyLogger.LogError($"[Dependency] Module '{component.GetType().Name}' requires '{dep.Name}' but it is missing!");
+                            MyLogger.LogError(
+                                $"[Dependency] Module '{component.GetType().Name}' requires '{dep.Name}' but it is missing!");
                         }
                     }
                 }
+
                 current = current.Next;
             }
 
@@ -188,7 +253,7 @@ namespace OSK
 
                 current = current.Next;
             }
-            
+
             if (Procedure != null && _entranceProcedure != null)
             {
                 MyLogger.Log($"[Main] Starting Entrance Procedure: {_entranceProcedure.Name}");
@@ -220,7 +285,8 @@ namespace OSK
                     PrefData.IsEncrypt = configInit.IsEncryptStorage;
                 }
 
-                if (Configs) Configs.CheckVersion(() => { MyLogger.Log("New version " + Application.version + " detected!"); });
+                if (Configs)
+                    Configs.CheckVersion(() => { MyLogger.Log("New version " + Application.version + " detected!"); });
                 IOUtility.directorySave = configInit.directoryPathSave;
                 IOUtility.customPath = configInit.CustomPathSave;
                 MyLogger.Log("Configs initialized successfully.");

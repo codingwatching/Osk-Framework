@@ -46,12 +46,48 @@ namespace OSK
             if (componentTypeCache.TryGetValue(moduleName, out var type))
                 return type;
 
+            // Try direct lookup with namespace
             var fullTypeName = "OSK." + moduleName;
             var componentType = Type.GetType(fullTypeName);
+            
+            // If failed, scan assemblies (once and cache)
+            if (componentType == null)
+            {
+                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    var foundType = assembly.GetType(fullTypeName);
+                    if (foundType == null) foundType = assembly.GetType(moduleName); // Try without namespace too
+                    
+                    if (foundType != null)
+                    {
+                        componentType = foundType;
+                        break;
+                    }
+                }
+            }
+
             if (componentType != null)
                 componentTypeCache[moduleName] = componentType;
 
             return componentType;
         }
+
+#if UNITY_EDITOR
+        [OnInspectorGUI]
+        private void ValidateModules()
+        {
+            if (_modules == ModuleType.None) return;
+
+            foreach (ModuleType moduleType in Enum.GetValues(typeof(ModuleType)))
+            {
+                if (moduleType == ModuleType.None || (_modules & moduleType) == 0) continue;
+                
+                if (GetComponentType(moduleType.ToString()) == null)
+                {
+                    Sirenix.Utilities.Editor.SirenixEditorGUI.ErrorMessageBox($"Implementation for module '{moduleType}' not found! Check class name matching ModuleType.");
+                }
+            }
+        }
+#endif
     }
 }

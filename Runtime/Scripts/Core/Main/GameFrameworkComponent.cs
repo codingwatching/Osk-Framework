@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using UnityEngine;
 
 namespace OSK
@@ -16,5 +18,17 @@ namespace OSK
         }
 
         public abstract void OnInit();
+
+        /// <summary>
+        /// Returns the types this module depends on via [RequireModule] attributes.
+        /// </summary>
+        public Type[] GetDependencies()
+        {
+            return GetType()
+                .GetCustomAttributes(typeof(RequireModuleAttribute), true)
+                .Cast<RequireModuleAttribute>()
+                .Select(a => a.RequiredType)
+                .ToArray();
+        }
     }
-}
+}

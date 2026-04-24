@@ -47,14 +47,27 @@ namespace OSK
             Type baseType = typeof(ProcedureNode);
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
-                foreach (Type type in assembly.GetTypes())
+                // Skip system and Unity internal assemblies for performance
+                var asmName = assembly.GetName().Name;
+                if (asmName.StartsWith("System") || asmName.StartsWith("Unity") || 
+                    asmName.StartsWith("UnityEngine") || asmName.StartsWith("UnityEditor") ||
+                    asmName.StartsWith("mscorlib") || asmName.StartsWith("netstandard") ||
+                    asmName.StartsWith("Mono.") || asmName.StartsWith("nunit") ||
+                    asmName.StartsWith("Newtonsoft") || asmName.StartsWith("Sirenix"))
+                    continue;
+
+                try
                 {
-                    if (type.IsSubclassOf(baseType) && !type.IsAbstract)
+                    foreach (Type type in assembly.GetTypes())
                     {
-                        var nodeInstance = (ProcedureNode)Activator.CreateInstance(type);
-                        AddNode(nodeInstance);
+                        if (type.IsSubclassOf(baseType) && !type.IsAbstract)
+                        {
+                            var nodeInstance = (ProcedureNode)Activator.CreateInstance(type);
+                            AddNode(nodeInstance);
+                        }
                     }
                 }
+                catch (Exception) { /* Safely skip assemblies that fail reflection */ }
             }
         }
 

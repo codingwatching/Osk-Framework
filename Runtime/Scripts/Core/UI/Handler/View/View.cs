@@ -51,7 +51,7 @@ namespace OSK
         {
             get
             {
-                int _depthOffset = viewType switch
+                int depthOffset = viewType switch
                 {
                     EViewType.None => 0,
                     EViewType.Popup => 1000,
@@ -59,7 +59,7 @@ namespace OSK
                     EViewType.Screen => -1000,
                     _ => 0
                 };
-                return depthEdit + _depthOffset;
+                return depthEdit + depthOffset;
             }
         }
 
@@ -249,7 +249,6 @@ namespace OSK
                 .OrderBy(v => v.Depth)
                 .ToList();
 
-            // 3. Thực thi SetSiblingIndex
             for (int i = 0; i < sortedViews.Count; i++)
             { 
                 sortedViews[i].transform.SetSiblingIndex(i);

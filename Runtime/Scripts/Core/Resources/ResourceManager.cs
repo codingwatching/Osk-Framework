@@ -28,8 +28,12 @@ namespace OSK
         {
             if (k_ResourceCache.TryGetValue(path, out var cached))
             {
-                k_ReferenceCount[path]++;
-                return (T)cached;
+                if (cached is T typedCached)
+                {
+                    k_ReferenceCount[path]++;
+                    return typedCached;
+                }
+                MyLogger.LogWarning($"[ResourceManager] Cache type mismatch at '{path}': expected {typeof(T).Name}, got {cached.GetType().Name}");
             }
 
             T resource = Resources.Load<T>(path);

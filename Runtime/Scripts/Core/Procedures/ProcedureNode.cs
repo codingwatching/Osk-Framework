@@ -10,37 +10,37 @@ namespace OSK
         /// <summary>
         /// Called when the node is initialized.
         /// </summary>
-        public abstract void OnInit(ProcedureProcessor processor);
+        public virtual void OnInit(ProcedureProcessor processor) {}
 
         /// <summary>
         /// Called when the node becomes active.
         /// </summary>
-        public abstract void OnEnter(ProcedureProcessor processor);
+        public virtual void OnEnter(ProcedureProcessor processor) {}
 
         /// <summary>
         /// Called continuously while the node is active.
         /// </summary>
-        public abstract void OnUpdate(ProcedureProcessor processor);
+        public virtual void OnUpdate(ProcedureProcessor processor) {}
         
         /// <summary>
         /// called continuously at a fixed interval.
         ///  </summary>
-        public abstract void OnFixedUpdate(ProcedureProcessor processor);
+        public virtual void OnFixedUpdate(ProcedureProcessor processor) {}
         
         /// <summary>
         /// called continuously at a fixed interval.
         ///  </summary>
-        public abstract void OnLateUpdate(ProcedureProcessor processor);
+        public virtual void OnLateUpdate(ProcedureProcessor processor) {}
 
         /// <summary>
         /// Called when the node is exited.
         /// </summary>
-        public abstract void OnExit(ProcedureProcessor processor);
+        public virtual void OnExit(ProcedureProcessor processor) {}
 
         /// <summary>
         /// Called when the node is removed from the processor.
         /// </summary>
-        public abstract void OnRemove(ProcedureProcessor processor);
+        public virtual void OnRemove(ProcedureProcessor processor) {}
 
         /// <summary>
         /// Switch to another ProcedureNode.

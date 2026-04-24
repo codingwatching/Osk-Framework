@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Collections.Generic;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -9,25 +11,37 @@ namespace OSK
     /// </summary>
     public partial class Main
     {
-        public static MonoManager Mono { get; private set; }
-        public static ObserverManager Observer { get; private set; }
-        public static EventBusManager Event { get; private set; }
-        public static PoolManager Pool { get; private set; }
-        public static CommandManager Command { get; private set; }
-        public static DirectorManager Director { get; private set; }
-        public static ResourceManager Res { get; private set; }
-        public static DataManager Data { get; private set; }
-        public static WebRequestManager WebRequest { get; private set; }
-        public static GameConfigsManager Configs { get; private set; }
-        public static UIManager UI { get; private set; }
-        public static SoundManager Sound { get; private set; }
-        public static LocalizationManager Localization { get; private set; }
-        public static EntityManager Entity { get; private set; }
-        public static BlackboardManager Blackboard { get; private set; }
-        public static ProcedureManager Procedure { get; private set; }
-        public static DataSheetManager DataSheet { get; private set; }
-        public static InputDeviceManager InputDevice { get; private set; }
-        public static GameInit GameInit { get; private set; }
+        // Safe Accessors with Guards
+        public static MonoManager Mono => EnsureModule<MonoManager>();
+        public static ObserverManager Observer => EnsureModule<ObserverManager>();
+        public static EventBusManager Event => EnsureModule<EventBusManager>();
+        public static PoolManager Pool => EnsureModule<PoolManager>();
+        public static CommandManager Command => EnsureModule<CommandManager>();
+        public static DirectorManager Director => EnsureModule<DirectorManager>();
+        public static ResourceManager Res => EnsureModule<ResourceManager>();
+        public static DataManager Data => EnsureModule<DataManager>();
+        public static WebRequestManager WebRequest => EnsureModule<WebRequestManager>();
+        public static GameConfigsManager Configs => EnsureModule<GameConfigsManager>();
+        public static UIManager UI => EnsureModule<UIManager>();
+        public static SoundManager Sound => EnsureModule<SoundManager>();
+        public static LocalizationManager Localization => EnsureModule<LocalizationManager>();
+        public static EntityManager Entity => EnsureModule<EntityManager>();
+        public static BlackboardManager Blackboard => EnsureModule<BlackboardManager>();
+        public static ProcedureManager Procedure => EnsureModule<ProcedureManager>();
+        public static DataSheetManager DataSheet => EnsureModule<DataSheetManager>();
+        public static InputDeviceManager InputDevice => EnsureModule<InputDeviceManager>();
+        public static GameInit GameInit => EnsureModule<GameInit>();
+
+        private static readonly Dictionary<Type, GameFrameworkComponent> k_Modules = new();
+
+        private static T EnsureModule<T>() where T : GameFrameworkComponent
+        {
+            if (k_Modules.TryGetValue(typeof(T), out var module))
+            {
+                return (T)module;
+            } 
+            throw new Exception($"[OSK Framework] ❌ Module '{typeof(T).Name}' chưa được khởi tạo hoặc chưa được bật trong Main Modules Selection!");
+        }
         
 
 
@@ -37,13 +51,24 @@ namespace OSK
         [HideLabel, InlineProperty]
         public MainModules mainModules;
 
+        [Title("🚀 Entry Point")]
+        [TypeFilter("GetProcedureTypes")]
+        [SerializeField] private Type _entranceProcedure;
+
         public bool isDestroyingOnLoad = false;
+
+        private IEnumerable<Type> GetProcedureTypes()
+        {
+            return AppDomain.CurrentDomain.GetAssemblies()
+                .SelectMany(s => s.GetTypes())
+                .Where(p => typeof(ProcedureNode).IsAssignableFrom(p) && !p.IsAbstract);
+        }
 
         public static Main Instance => SingletonManager.Instance.Get<Main>();
 
         protected void Awake()
         {
-            gameObject.name = " ======= [OSK Framework] ==========";
+            gameObject.name = "======== [OSK Framework] ==========";
 
             SingletonManager.Instance.RegisterGlobal(this);
             if (isDestroyingOnLoad)
@@ -56,68 +81,105 @@ namespace OSK
 
         private void InitModules()
         {
-            foreach (ModuleType moduleType in Enum.GetValues(typeof(ModuleType)))
+            // 1. Get all module types and sort them by their bit value (priority)
+            var moduleValues = (ModuleType[])Enum.GetValues(typeof(ModuleType));
+            Array.Sort(moduleValues, (a, b) => ((int)a).CompareTo((int)b));
+
+            foreach (ModuleType moduleType in moduleValues)
             {
                 if (moduleType == ModuleType.None || (mainModules.Modules & moduleType) == 0) continue;
 
-                var newObject = new GameObject(moduleType.ToString());
-                newObject.transform.SetParent(transform);
-                var componentType = mainModules.GetComponentType(moduleType.ToString());
+                var moduleName = moduleType.ToString();
+                var componentType = mainModules.GetComponentType(moduleName);
+                
                 if (componentType != null)
                 {
+                    var newObject = new GameObject($"{(int)moduleType}.{moduleName}");
+                    newObject.transform.SetParent(transform);
+                    
                     var module = newObject.AddComponent(componentType) as GameFrameworkComponent;
-                    AssignModuleInstance(module);
-                    MyLogger.Log($"Module {moduleType} initialized.");
+                    AutoAssignModule(module);
+                    
+                    MyLogger.Log($"[Main] Module {moduleName} initialized and assigned.");
                 }
                 else
                 {
-                    MyLogger.LogError($"Module {moduleType} not found in MainModules.");
+                    MyLogger.LogError($"[Main] Implementation for {moduleName} not found!");
                 }
             }
         }
 
-        private void AssignModuleInstance(GameFrameworkComponent module)
+        private void AutoAssignModule(GameFrameworkComponent module)
         {
-            if (module is MonoManager manager) Mono = manager;
-            else if (module is ObserverManager observer) Observer = observer;
-            else if (module is EventBusManager eventBus) Event = eventBus;
-            else if (module is PoolManager pool) Pool = pool;
-            else if (module is CommandManager command) Command = command;
-            else if (module is DirectorManager scene) Director = scene;
-            else if (module is ResourceManager res) Res = res;
-            else if (module is DataManager data) Data = data;
-            else if (module is WebRequestManager webRequest) WebRequest = webRequest;
-            else if (module is GameConfigsManager configs) Configs = configs;
-            else if (module is UIManager ui) UI = ui;
-            else if (module is SoundManager sound) Sound = sound;
-            else if (module is LocalizationManager localization) Localization = localization;
-            else if (module is EntityManager entity) Entity = entity;
-            else if (module is BlackboardManager blackboard) Blackboard = blackboard;
-            else if (module is ProcedureManager procedure) Procedure = procedure;
-            else if (module is DataSheetManager dataSheet) DataSheet = dataSheet;
-            else if (module is InputDeviceManager input) InputDevice = input;
-            else if (module is GameInit gameInit) GameInit = gameInit;
-
-            else MyLogger.LogError($"[AssignModuleToField] Unknown module type: {module}");
+            var type = module.GetType();
+            k_Modules[type] = module;
+            
+            foreach (var iface in type.GetInterfaces())
+                k_Modules[iface] = module;
         }
+
+        /// <summary>
+        /// Tự động tiêm (Inject) các module vào một đối tượng bất kỳ.
+        /// Sử dụng: Main.Instance.Inject(this);
+        /// </summary>
+        public static void Inject(object target)
+        {
+            if (target == null) return;
+            
+            var fields = target.GetType().GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            foreach (var field in fields)
+            {
+                var attr = field.GetCustomAttributes(typeof(InjectModuleAttribute), true);
+                if (attr.Length > 0)
+                {
+                    var moduleType = field.FieldType;
+                    if (k_Modules.TryGetValue(moduleType, out var module))
+                    {
+                        field.SetValue(target, module);
+                    }
+                    else
+                    {
+                        MyLogger.LogError($"[Inject] Thất bại: Không tìm thấy Module loại '{moduleType.Name}' để tiêm vào {target.GetType().Name}");
+                    }
+                }
+            }
+        }
+
 
         private void InitDataComponents()
         {
             var current = SGameFrameworkComponents.First;
             while (current != null)
             {
-                var componentName = current.Value?.GetType().Name ?? "Unknown";
+                var component = current.Value;
+                if (component != null)
+                {
+                    var deps = component.GetDependencies();
+                    foreach (var dep in deps)
+                    {
+                        if (GetModule(dep) == null)
+                        {
+                            MyLogger.LogError($"[Dependency] Module '{component.GetType().Name}' requires '{dep.Name}' but it is missing!");
+                        }
+                    }
+                }
+                current = current.Next;
+            }
+
+            current = SGameFrameworkComponents.First;
+            while (current != null)
+            {
+                var component = current.Value;
+                if (component == null)
+                {
+                    current = current.Next;
+                    continue;
+                }
+
+                var componentName = component.GetType().Name;
                 try
                 {
-                    if (current.Value == null)
-                    {
-                        MyLogger.LogError($"Component '{componentName}' is NULL.");
-						return;
-                    }
-                    else
-                    {
-                        current.Value.OnInit();
-                    }
+                    component.OnInit();
                 }
                 catch (Exception e)
                 {
@@ -126,6 +188,13 @@ namespace OSK
 
                 current = current.Next;
             }
+            
+            if (Procedure != null && _entranceProcedure != null)
+            {
+                MyLogger.Log($"[Main] Starting Entrance Procedure: {_entranceProcedure.Name}");
+                Procedure.RunProcedureNode(_entranceProcedure);
+            }
+
             MyLogger.Log("Init Data Components Done!");
         }
 
@@ -139,10 +208,9 @@ namespace OSK
 
             if (configInit != null)
             {
-                Application.targetFrameRate = configInit.TargetFrameRate;
+                Application.targetFrameRate = configInit.TargetFrameRate > 0 ? configInit.TargetFrameRate : 300;
                 Application.runInBackground = configInit.RunInBackground;
                 Time.timeScale = configInit.GameSpeed;
-                QualitySettings.vSyncCount = configInit.VSyncCount;
                 Screen.sleepTimeout = configInit.NeverSleep ? SleepTimeout.NeverSleep : SleepTimeout.SystemSetting;
                 MyLogger.IsLogEnabled = configInit.IsEnableLogg;
 

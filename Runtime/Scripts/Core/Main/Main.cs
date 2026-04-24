@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace OSK
@@ -14,6 +15,40 @@ namespace OSK
     public partial class Main : MonoBehaviour
     { 
         public static readonly GameFrameworkLinkedList<GameFrameworkComponent> SGameFrameworkComponents = new();
+        
+        private static readonly List<IUpdateable> k_Updateables = new();
+        private static readonly List<IFixedUpdateable> k_FixedUpdateables = new();
+        private static readonly List<ILateUpdateable> k_LateUpdateables = new();
+        
+        private static bool k_IsPaused = false;
+        public static void SetPause(bool pause) => k_IsPaused = pause;
+
+        private void Update()
+        {
+            if (k_IsPaused) return;
+            for (int i = 0; i < k_Updateables.Count; i++)
+            {
+                k_Updateables[i].OnUpdate();
+            }
+        }
+
+        private void FixedUpdate()
+        {
+            if (k_IsPaused) return;
+            for (int i = 0; i < k_FixedUpdateables.Count; i++)
+            {
+                k_FixedUpdateables[i].OnFixedUpdate();
+            }
+        }
+
+        private void LateUpdate()
+        {
+            if (k_IsPaused) return;
+            for (int i = 0; i < k_LateUpdateables.Count; i++)
+            {
+                k_LateUpdateables[i].OnLateUpdate();
+            }
+        }
 
         public static T GetModule<T>() where T : GameFrameworkComponent
         {
@@ -74,6 +109,11 @@ namespace OSK
             }
 
             SGameFrameworkComponents.AddLast(gameFrameworkComponent);
+
+            // Add to update lists if applicable
+            if (gameFrameworkComponent is IUpdateable u) k_Updateables.Add(u);
+            if (gameFrameworkComponent is IFixedUpdateable f) k_FixedUpdateables.Add(f);
+            if (gameFrameworkComponent is ILateUpdateable l) k_LateUpdateables.Add(l);
         }
         
         internal static void UnRegister(GameFrameworkComponent gameFrameworkComponent)
@@ -92,6 +132,11 @@ namespace OSK
                 if (current.Value.GetType() == type)
                 {
                     SGameFrameworkComponents.Remove(current);
+                    
+                    // Remove from update lists if applicable
+                    if (gameFrameworkComponent is IUpdateable u) k_Updateables.Remove(u);
+                    if (gameFrameworkComponent is IFixedUpdateable f) k_FixedUpdateables.Remove(f);
+                    if (gameFrameworkComponent is ILateUpdateable l) k_LateUpdateables.Remove(l);
                     return;
                 }
 
@@ -103,6 +148,9 @@ namespace OSK
         {
             OSK.MyLogger.Log($"Shutdown Game Framework ({shutdownType})...");
             SGameFrameworkComponents.Clear();
+            k_Updateables.Clear();
+            k_FixedUpdateables.Clear();
+            k_LateUpdateables.Clear();
 
             if (shutdownType == ShutdownType.None)
             {

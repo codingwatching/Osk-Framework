@@ -7,7 +7,7 @@ using System.Reflection;
 
 namespace OSK
 {
-    public class MonoManager : GameFrameworkComponent
+    public class MonoManager : GameFrameworkComponent, IUpdateable, IFixedUpdateable, ILateUpdateable
     {
         [ReadOnly, ShowInInspector] private readonly List<Action> _toMainThreads = new();
         [ReadOnly, ShowInInspector] private List<Action> _localToMainThreads = new();
@@ -100,15 +100,15 @@ namespace OSK
 
         #endregion
 
-        #region Update Handle
+        #region Update Handle (Integrated with Main)
 
-        private void Update()
+        public void OnUpdate()
         {
             if (IsPause || SpeedGame == 0) return;
 
             float deltaTime = Time.deltaTime * SpeedGame;
 
-            // Copy snapshot để tránh collection modified
+            // Copy snapshot to avoid collection modified during iteration
             _tempTickList.Clear();
             _tempTickList.AddRange(tickProcesses);
 
@@ -118,7 +118,7 @@ namespace OSK
                 if (t != null) t.Tick(deltaTime);
             }
 
-            // Main thread queue
+            // Execute Main thread queue
             if (!_isToMainThreadQueueEmpty)
             {
                 _localToMainThreads.Clear();
@@ -130,11 +130,20 @@ namespace OSK
                 }
 
                 for (int i = 0; i < _localToMainThreads.Count; i++)
-                    _localToMainThreads[i]?.Invoke();
+                {
+                    try
+                    {
+                        _localToMainThreads[i]?.Invoke();
+                    }
+                    catch (Exception ex)
+                    {
+                        MyLogger.LogError($"[MonoManager] Error in MainThread action: {ex.Message}\n{ex.StackTrace}");
+                    }
+                }
             }
         }
 
-        private void FixedUpdate()
+        public void OnFixedUpdate()
         {
             if (IsPause || SpeedGame == 0) return;
 
@@ -150,7 +159,7 @@ namespace OSK
             }
         }
 
-        private void LateUpdate()
+        public void OnLateUpdate()
         {
             if (IsPause || SpeedGame == 0) return;
 
@@ -232,13 +241,8 @@ namespace OSK
             if (action == null) return;
             lock (_toMainThreads)
             {
-                if (_toMainThreads.Count == 0)
-                    return;
-
-                _localToMainThreads.Clear();
-                _localToMainThreads.AddRange(_toMainThreads);
-                _toMainThreads.Clear();
-                _isToMainThreadQueueEmpty = true;
+                _toMainThreads.Add(action);
+                _isToMainThreadQueueEmpty = false;
             }
         }
 

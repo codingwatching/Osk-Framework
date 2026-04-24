@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace OSK
 {
-    public class ProcedureManager : GameFrameworkComponent 
+    public class ProcedureManager : GameFrameworkComponent, IUpdateable, IFixedUpdateable, ILateUpdateable
     {
         private ProcedureProcessor procedureProcessor;
         private Type procedureNodeType = typeof(ProcedureNode);
@@ -64,6 +64,29 @@ namespace OSK
         public void AddProcedureNodes(params ProcedureNode[] nodes)
         {
             procedureProcessor.AddNodes(nodes);
+        }
+
+        /// <summary>
+        ///  Start procedure
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <exception cref="NotImplementedException"></exception>
+        /// <exception cref="Exception"></exception>
+        public void StartProcedure<T>() where T : ProcedureNode
+        {
+            var type = typeof(T);
+            if (!procedureNodeType.IsAssignableFrom(type))
+                throw new NotImplementedException($"Type: {type} is not derived from ProcedureNode.");
+            if (!procedureProcessor.HasNode(type))
+            {
+                var node = Activator.CreateInstance(type) as ProcedureNode;
+                if (node == null)
+                    throw new Exception($"Cannot create instance of {type}");
+        
+                procedureProcessor.AddNodes(node);
+            }
+
+            procedureProcessor.ChangeNode(type);
         }
 
         /// <summary>

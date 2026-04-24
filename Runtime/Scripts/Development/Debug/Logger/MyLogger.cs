@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Diagnostics;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
@@ -83,6 +83,7 @@ namespace OSK
     public static class MyLogger
     {
         public static bool IsLogEnabled = true;
+        public static bool EnableStackTrace = false; // Tắt mặc định để tối ưu hiệu năng
 
         public delegate void OnLogFunc(string className, string message, Object context);
 
@@ -131,41 +132,53 @@ namespace OSK
 
         private static void FinalLog(string level, string message, Object context = null)
         {
-            var st = new StackTrace(2, true);
-            var frame = st.GetFrame(0);
-            if (frame == null) return;
+            if (!IsLogEnabled) return;
 
-            var method = frame.GetMethod();
-            if (method.DeclaringType != null)
+            string className = "Unknown";
+            string methodName = "Unknown";
+            string file = null;
+            int line = 0;
+
+            // Chỉ tạo StackTrace khi được bật (tốn CPU)
+            if (EnableStackTrace)
             {
-                string className = method.DeclaringType.Name;
-                string methodName = method.Name;
-                string file = frame.GetFileName();
-                int line = frame.GetFileLineNumber();
-
-                bool canLog = DebugFilterData.RegisterAndCheck(className, methodName, message, level, file, line);
-                if (!IsLogEnabled || !canLog) return;
-
-                string finalMsg;
-
-                if (level == "Error" || level == "Fatal")
+                var st = new StackTrace(2, true);
+                var frame = st.GetFrame(0);
+                if (frame != null)
                 {
-                    finalMsg = $"<b><color=#FF5555><size=13>[{className}] -> {message}</size></color></b>";
-                    Debug.Log(finalMsg, context);
+                    var method = frame.GetMethod();
+                    if (method?.DeclaringType != null)
+                    {
+                        className = method.DeclaringType.Name;
+                        methodName = method.Name;
+                        file = frame.GetFileName();
+                        line = frame.GetFileLineNumber();
+                    }
                 }
-                else if (level == "Warning")
-                {
-                    finalMsg = $"<b><color=#FFD600><size=12>[{className}] -> {message}</size></color></b>";
-                    Debug.Log(finalMsg, context);
-                }
-                else
-                {
-                    finalMsg = $"<b><color=#FFFFFF><size=12>[{className}] -> {message}</size></color></b>";
-                    Debug.Log(finalMsg, context);
-                }
-
-                OnLog?.Invoke(className, message, context);
             }
+
+            bool canLog = DebugFilterData.RegisterAndCheck(className, methodName, message, level, file, line);
+            if (!canLog) return;
+
+            string finalMsg;
+
+            if (level == "Error" || level == "Fatal")
+            {
+                finalMsg = $"<b><color=#FF5555><size=13>[{className}] -> {message}</size></color></b>";
+                Debug.LogError(finalMsg, context);
+            }
+            else if (level == "Warning")
+            {
+                finalMsg = $"<b><color=#FFD600><size=12>[{className}] -> {message}</size></color></b>";
+                Debug.LogWarning(finalMsg, context);
+            }
+            else
+            {
+                finalMsg = $"<b><color=#FFFFFF><size=12>[{className}] -> {message}</size></color></b>";
+                Debug.Log(finalMsg, context);
+            }
+
+            OnLog?.Invoke(className, message, context);
         }
     }
 

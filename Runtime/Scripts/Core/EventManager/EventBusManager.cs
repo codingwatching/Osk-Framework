@@ -78,22 +78,38 @@ namespace OSK
             // Cache last event 
             lastEvents[eventType] = gameEvent;
 
-            // send to sync subscribers
-            if (syncSubscribers.ContainsKey(eventType))
+            // send to sync subscribers (snapshot to avoid collection modified)
+            if (syncSubscribers.TryGetValue(eventType, out var syncList))
             {
-                foreach (var subscriber in syncSubscribers[eventType])
+                var snapshot = syncList.ToArray();
+                foreach (var subscriber in snapshot)
                 {
                     (subscriber as Action<T>)?.Invoke(gameEvent);
                 }
             }
 
-            // send to async subscribers (fire and forget)
-            if (asyncSubscribers.ContainsKey(eventType))
+            // send to async subscribers (fire and forget with error handling)
+            if (asyncSubscribers.TryGetValue(eventType, out var asyncList))
             {
-                foreach (var subscriber in asyncSubscribers[eventType])
+                var snapshot = asyncList.ToArray();
+                foreach (var subscriber in snapshot)
                 {
-                    _ = (subscriber as Func<T, UniTask>)?.Invoke(gameEvent);
+                    var handler = subscriber as Func<T, UniTask>;
+                    if (handler != null)
+                        SafeInvokeAsync(handler, gameEvent).Forget();
                 }
+            }
+        }
+
+        private async UniTask SafeInvokeAsync<T>(Func<T, UniTask> handler, T gameEvent) where T : GameEvent
+        {
+            try
+            {
+                await handler.Invoke(gameEvent);
+            }
+            catch (Exception ex)
+            {
+                MyLogger.LogError($"[EventBus] Async subscriber error for {typeof(T).Name}: {ex.Message}");
             }
         }
 
@@ -105,19 +121,21 @@ namespace OSK
             // Cache last event 
             lastEvents[eventType] = gameEvent;
 
-            // send to sync subscribers
-            if (syncSubscribers.ContainsKey(eventType))
+            // send to sync subscribers (snapshot to avoid collection modified)
+            if (syncSubscribers.TryGetValue(eventType, out var syncList))
             {
-                foreach (var subscriber in syncSubscribers[eventType])
+                var snapshot = syncList.ToArray();
+                foreach (var subscriber in snapshot)
                 {
                     (subscriber as Action<T>)?.Invoke(gameEvent);
                 }
             }
 
-            // send to async subscribers
-            if (asyncSubscribers.ContainsKey(eventType))
+            // send to async subscribers (snapshot to avoid collection modified)
+            if (asyncSubscribers.TryGetValue(eventType, out var asyncList))
             {
-                foreach (var subscriber in asyncSubscribers[eventType])
+                var snapshot = asyncList.ToArray();
+                foreach (var subscriber in snapshot)
                 {
                     if (subscriber is Func<T, UniTask> asyncHandler)
                     {

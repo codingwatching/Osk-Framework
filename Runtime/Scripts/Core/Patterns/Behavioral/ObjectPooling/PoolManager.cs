@@ -388,12 +388,20 @@ namespace OSK
             }
         }
 
+        // Cache IPoolable để tránh gọi GetComponents mỗi lần spawn/despawn
+        private readonly Dictionary<GameObject, IPoolable[]> _poolableCache = new();
+
         private void TriggerInterface(Object instance, bool isSpawn)
         {
             GameObject go = instance is Component c ? c.gameObject : instance as GameObject;
             if (go == null) return;
 
-            var poolables = go.GetComponents<IPoolable>();
+            if (!_poolableCache.TryGetValue(go, out var poolables))
+            {
+                poolables = go.GetComponents<IPoolable>();
+                _poolableCache[go] = poolables;
+            }
+
             foreach (var p in poolables)
             {
                 if (isSpawn) p.OnSpawn();

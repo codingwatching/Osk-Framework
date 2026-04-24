@@ -1,102 +1,64 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 namespace OSK
 {
-    public class ObjectPool<T>
+    public class ObjectPool<T> where T : class
     {
-        private List<ObjectPoolContainer<T>> _listPool;
-        private Dictionary<T, ObjectPoolContainer<T>> _lookupDic;
-        private Func<T> _factoryFunc;
-        private int _lastIndex = 0;
+        private readonly Stack<T> _pool;
+        private readonly HashSet<T> _inUse;
+        private readonly Func<T> _factoryFunc;
 
-        public int Count
-        {
-            get => _listPool.Count;
-        }
-
-        public int CountUsedItems
-        {
-            get => _lookupDic.Count;
-        }
+        public int Count => _pool.Count + _inUse.Count;
+        public int CountUsedItems => _inUse.Count;
+        public int CountInactiveItems => _pool.Count;
 
         public ObjectPool(Func<T> factoryFunc, int initialSize)
         {
-            this._factoryFunc = factoryFunc;
-            _listPool = new List<ObjectPoolContainer<T>>(initialSize);
-            _lookupDic = new Dictionary<T, ObjectPoolContainer<T>>(initialSize);
-            Warm(initialSize);
-        }
-
-        private void Warm(int capacity)
-        {
-            for (int i = 0; i < capacity; i++)
-                CreateContainer();
-        }
-
-        private ObjectPoolContainer<T> CreateContainer()
-        {
-            var container = new ObjectPoolContainer<T>();
-            container.Item = _factoryFunc();
-            _listPool.Add(container);
-            return container;
+            _factoryFunc = factoryFunc;
+            _pool = new Stack<T>(initialSize);
+            _inUse = new HashSet<T>(initialSize);
+            
+            for (int i = 0; i < initialSize; i++)
+            {
+                T item = _factoryFunc();
+                if (item != null) _pool.Push(item);
+            }
         }
 
         public T GetItem()
         {
-            ObjectPoolContainer<T> container = null;
+            T item = null;
 
-            int checkedCount = 0;
-            while (checkedCount < _listPool.Count)
+            // Lấy từ pool cho đến khi được 1 cái không null (đề phòng bị Destroy ngoài ý muốn)
+            while (_pool.Count > 0)
             {
-                _lastIndex++;
-                if (_lastIndex >= _listPool.Count) _lastIndex = 0;
-
-                var temp = _listPool[_lastIndex];
-
-                if (temp.Item == null || temp.Used)
-                {
-                    if (temp.Item == null)
-                    {
-                        _listPool.RemoveAt(_lastIndex);
-                        _lastIndex--;
-                    }
-
-                    checkedCount++;
-                    continue;
-                }
-
-                container = temp;
-                break;
+                item = _pool.Pop();
+                if (item != null && !item.Equals(null)) break;
+                item = null;
             }
 
-            if (container == null)
+            if (item == null)
             {
-                MyLogger.LogWarning($"No available item found in pool of type {typeof(T).Name}. Creating a new one.");
-                container = CreateContainer();
+                item = _factoryFunc();
             }
 
-            container.Consume();
-
-            if (container.Item == null)
+            if (item != null)
             {
-                MyLogger.LogWarning($"Created item is null in pool of type {typeof(T).Name}. Returning default value.");
-                return default;
+                _inUse.Add(item);
             }
 
-            _lookupDic[container.Item] = container;
-            return container.Item;
+            return item;
         }
 
-        public void AutoRefillIfNeeded()
+        public void ReleaseItem(T item)
         {
-            int validCount = _listPool.Select(x => x.Item).Count(x => x != null);
-            if (_listPool.Count == 0 || validCount * 1f / _listPool.Count < 0.2f)
+            if (item == null || item.Equals(null)) return;
+
+            if (_inUse.Remove(item))
             {
-                int refillCount = Mathf.Max(1, _listPool.Count / 2);
-                Refill(refillCount);
+                _pool.Push(item);
             }
         }
 
@@ -104,77 +66,42 @@ namespace OSK
         {
             for (int i = 0; i < amount; i++)
             {
-                var container = CreateContainer();
-                _listPool.Add(container);
-            }
-
-            MyLogger.Log($"[Pool] Refilled {amount} item(s) to pool of type {typeof(T).Name}.");
-        }
-
-        public List<T> GetAllItems()
-        {
-            List<T> items = new List<T>();
-            foreach (var container in _listPool)
-            {
-                items.Add(container.Item);
-            }
-
-            return items;
-        }
-
-
-        public void ReleaseItem(T item)
-        {
-            if (_lookupDic.TryGetValue(item, out var container))
-            {
-                container.Release();
-                _lookupDic.Remove(item);
-            }
-            else
-            {
-                MyLogger.LogWarning("This object pool does not contain the item provided: " + item);
+                T item = _factoryFunc();
+                if (item != null) _pool.Push(item);
             }
         }
 
         public void DestroyAndClean()
         {
-            for (int i = _listPool.Count - 1; i >= 0; i--)
+            // Hủy các item đang rảnh
+            while (_pool.Count > 0)
             {
-                var container = _listPool[i];
-                if (container.Item == null)
-                {
-                    _listPool.RemoveAt(i);
-                    continue;
-                }
-
-                if (container.Item is GameObject go)
-                    GameObject.Destroy(go);
-
-                else if (container.Item is Component comp)
-                    GameObject.Destroy(comp.gameObject);
-
-                _listPool.RemoveAt(i);
-                _lookupDic.Remove(container.Item);
+                T item = _pool.Pop();
+                DestroyItem(item);
             }
 
-            var keysToRemove = _lookupDic.Where(kvp => kvp.Key == null).Select(kvp => kvp.Key).ToList();
-            foreach (var key in keysToRemove)
+            // Hủy các item đang dùng (nếu cần dọn sạch hoàn toàn)
+            foreach (var item in _inUse)
             {
-                _lookupDic.Remove(key);
+                DestroyItem(item);
             }
+            _inUse.Clear();
+        }
 
-            MyLogger.Log($"[Pool] Cleaned and destroyed unused items. Remaining: {_listPool.Count}");
+        private void DestroyItem(T item)
+        {
+            if (item == null || item.Equals(null)) return;
+
+            if (item is GameObject go)
+                UnityEngine.Object.Destroy(go);
+            else if (item is Component comp)
+                UnityEngine.Object.Destroy(comp.gameObject);
         }
 
         public void Clear()
         {
-            foreach (var container in _listPool)
-            {
-                container.Release();
-            }
-
-            _listPool.Clear();
-            _lookupDic.Clear();
+            _pool.Clear();
+            _inUse.Clear();
         }
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Sirenix.OdinInspector;
 
 namespace OSK
 {
@@ -16,6 +17,16 @@ namespace OSK
     { 
         public static readonly GameFrameworkLinkedList<GameFrameworkComponent> SGameFrameworkComponents = new();
         
+        [TitleGroup("Tick System", "Centralized Execution", alignment: TitleAlignments.Centered)]
+        [ShowInInspector, ReadOnly, ListDrawerSettings(Expanded = true)]
+        private static List<IUpdateable> Updateables => k_Updateables;
+
+        [ShowInInspector, ReadOnly]
+        private static List<IFixedUpdateable> FixedUpdateables => k_FixedUpdateables;
+
+        [ShowInInspector, ReadOnly]
+        private static List<ILateUpdateable> LateUpdateables => k_LateUpdateables;
+
         private static readonly List<IUpdateable> k_Updateables = new();
         private static readonly List<IFixedUpdateable> k_FixedUpdateables = new();
         private static readonly List<ILateUpdateable> k_LateUpdateables = new();
@@ -111,9 +122,21 @@ namespace OSK
             SGameFrameworkComponents.AddLast(gameFrameworkComponent);
 
             // Add to update lists if applicable
-            if (gameFrameworkComponent is IUpdateable u) k_Updateables.Add(u);
-            if (gameFrameworkComponent is IFixedUpdateable f) k_FixedUpdateables.Add(f);
-            if (gameFrameworkComponent is ILateUpdateable l) k_LateUpdateables.Add(l);
+            RegisterTick(gameFrameworkComponent);
+        }
+
+        public static void RegisterTick(object obj)
+        {
+            if (obj is IUpdateable u && !k_Updateables.Contains(u)) k_Updateables.Add(u);
+            if (obj is IFixedUpdateable f && !k_FixedUpdateables.Contains(f)) k_FixedUpdateables.Add(f);
+            if (obj is ILateUpdateable l && !k_LateUpdateables.Contains(l)) k_LateUpdateables.Add(l);
+        }
+
+        public static void UnRegisterTick(object obj)
+        {
+            if (obj is IUpdateable u) k_Updateables.Remove(u);
+            if (obj is IFixedUpdateable f) k_FixedUpdateables.Remove(f);
+            if (obj is ILateUpdateable l) k_LateUpdateables.Remove(l);
         }
         
         internal static void UnRegister(GameFrameworkComponent gameFrameworkComponent)
@@ -134,9 +157,7 @@ namespace OSK
                     SGameFrameworkComponents.Remove(current);
                     
                     // Remove from update lists if applicable
-                    if (gameFrameworkComponent is IUpdateable u) k_Updateables.Remove(u);
-                    if (gameFrameworkComponent is IFixedUpdateable f) k_FixedUpdateables.Remove(f);
-                    if (gameFrameworkComponent is ILateUpdateable l) k_LateUpdateables.Remove(l);
+                    UnRegisterTick(gameFrameworkComponent);
                     return;
                 }
 

@@ -177,10 +177,14 @@ namespace OSK
 
             var finalParent = parent != null ? parent : info.DefaultParent;
             SetupInstance(result, finalParent, true);
-            InstanceLookup[result] = info;
-            info.ActiveList.Add(result);
+
+            // SMART KEY: Luôn dùng GameObject làm Key nếu là Component/GO để Despawn linh hoạt
+            Object registrationKey = result is Component comp ? comp.gameObject : (Object)result;
+            
+            InstanceLookup[registrationKey] = info;
+            info.ActiveList.Add(registrationKey);
             info.UpdateStats();
-            TriggerInterface(result, true);
+            TriggerInterface(registrationKey, true);
 
             return result;
         }
@@ -202,17 +206,17 @@ namespace OSK
         {
             if (instance == null) return;
 
-            if (InstanceLookup.TryGetValue(instance, out var poolInfo))
+            // SMART LOOKUP: Nếu truyền vào Component, tìm GameObject của nó để check Pool
+            Object key = instance is Component c ? c.gameObject : instance;
+
+            if (InstanceLookup.TryGetValue(key, out var poolInfo))
             {
-                TriggerInterface(instance, false);
-                SetupInstance(instance, poolInfo.DefaultParent, false);
-                poolInfo.ActiveList.Remove(instance);
-                InstanceLookup.Remove(instance);
+                TriggerInterface(key, false);
+                SetupInstance(key, poolInfo.DefaultParent, false);
+                poolInfo.ActiveList.Remove(key);
+                InstanceLookup.Remove(key);
 
-                Object objectToRelease = instance;
-                if (instance is Component c) objectToRelease = c.gameObject;
-
-                poolInfo.Pool.ReleaseItem(objectToRelease);
+                poolInfo.Pool.ReleaseItem(key);
             }
         }
 
@@ -241,11 +245,26 @@ namespace OSK
             DOVirtual.DelayedCall(delay, () => { DespawnByKey(key); }, unscaleTime);
         }
 
+        /// <summary>
+        /// Kiểm tra xem một đối tượng có đang được quản lý bởi Pool hay không
+        /// </summary>
+        public bool IsFromPool(Object instance)
+        {
+            if (instance == null) return false;
+            Object key = instance is Component c ? c.gameObject : instance;
+            return InstanceLookup.ContainsKey(key);
+        }
+
+        #endregion
+
         public void DespawnByKey(string key)
         {
             if (!PoolKeyLookup.TryGetValue(key, out var info)) return;
-            var toDespawn = new List<Object>(info.ActiveList);
-            foreach (var obj in toDespawn) Despawn(obj);
+            // Dùng List trực tiếp thay vì tạo copy mới (alloc)
+            for (int i = info.ActiveList.Count - 1; i >= 0; i--)
+            {
+                Despawn(info.ActiveList[i]);
+            }
         }
 
         public void DespawnAllInGroup(string groupName)
@@ -262,11 +281,17 @@ namespace OSK
 
         public void DespawnAllActive()
         {
-            var allActive = InstanceLookup.Keys.ToList();
-            foreach (var obj in allActive) Despawn(obj);
+            // Tránh alloc List từ Keys
+            var enumerator = InstanceLookup.GetEnumerator();
+            List<Object> keys = new List<Object>(InstanceLookup.Count);
+            foreach (var kvp in InstanceLookup) keys.Add(kvp.Key);
+            
+            for (int i = keys.Count - 1; i >= 0; i--)
+            {
+                Despawn(keys[i]);
+            }
         }
 
-        #endregion
 
         // ----------------------------------------------------------------------
         // DESTROY & CLEANUP
@@ -343,22 +368,15 @@ namespace OSK
                 System.Func<Object> createMethod = () =>
                 {
                     var obj = InstantiatePrefab(key, info.DefaultParent);
+                    
+                    // LUÔN LUÔN deactive ngay khi vừa sinh ra
+                    SetupInstance(obj, info.DefaultParent, false);
 
                     info.RealTotalCount++;
-                    //MyLogger.Log($"[Pool Debug] Created new {key.name}. Total: {info.RealTotalCount}/{maxSize}");
                     return obj;
                 };
 
                 info.Pool = new ObjectPool<Object>(createMethod, size);
-
-                for (int i = 0; i < size; i++)
-                {
-                    if (maxSize > 0 && info.RealTotalCount >= maxSize) break;
-                    var item = info.Pool.GetItem();
-                    SetupInstance(item, info.DefaultParent, false);
-                    info.Pool.ReleaseItem(item);
-                }
-
                 prefabDict[key] = info;
                 return info;
             }
@@ -398,15 +416,27 @@ namespace OSK
 
             if (!_poolableCache.TryGetValue(go, out var poolables))
             {
+                // Dọn dẹp cache định kỳ hoặc khi gặp key null (leak protection)
+                if (_poolableCache.Count > 100) CleanCache();
+                
                 poolables = go.GetComponents<IPoolable>();
                 _poolableCache[go] = poolables;
             }
 
-            foreach (var p in poolables)
+            for (int i = 0; i < poolables.Length; i++)
             {
-                if (isSpawn) p.OnSpawn();
-                else p.OnDespawn();
+                if (isSpawn) poolables[i].OnSpawn();
+                else poolables[i].OnDespawn();
             }
+        }
+
+        private void CleanCache()
+        {
+            var nullKeys = new List<GameObject>();
+            foreach (var key in _poolableCache.Keys)
+                if (key == null || key.Equals(null)) nullKeys.Add(key);
+            
+            foreach (var key in nullKeys) _poolableCache.Remove(key);
         }
 
         private bool IsGroupAndPrefabExist(string groupName, Object prefab)

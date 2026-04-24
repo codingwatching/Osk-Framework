@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace OSK
 {
-    public class InputDeviceManager : GameFrameworkComponent
+    public class InputDeviceManager : GameFrameworkComponent, IUpdateable
     {
         public static Action<string> OnActionDown;
         public static Action<string> OnActionUp;
@@ -34,7 +34,7 @@ namespace OSK
             isInit = true;
         }
 
-        private void Update()
+        public void OnUpdate()
         {
             if (!isInit) return;
             

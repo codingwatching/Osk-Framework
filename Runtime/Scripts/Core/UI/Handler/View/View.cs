@@ -102,6 +102,12 @@ namespace OSK
 
         public bool IsShowing => _isShowing;
 
+        /// <summary>
+        /// True khi view đang trong quá trình close transition (chưa SetActive false).
+        /// Subclass dùng để skip Update logic trong thời gian này.
+        /// </summary>
+        public bool IsClosing { get; private set; }
+
         [ReadOnly, SerializeField]
         private UITransition _uiTransition;
 
@@ -160,12 +166,11 @@ namespace OSK
             _uiTransition = GetComponent<UITransition>();
             _uiTransition?.Initialize();
 
-
             if (_rootUI == null)
             {
                 MyLogger.LogError("[View] RootUI is still null after initialization.");
             }
-            SortHierarchyByDepth();
+            if (_rootUI != null) _rootUI.IsDirtySort = true;
         }
 
         protected virtual void Awake() => OnInit();
@@ -182,9 +187,16 @@ namespace OSK
 
             SetData(data);
             _isShowing = true;
+            IsClosing = false;
             gameObject.SetActive(true);
 
-            SortHierarchyByDepth();
+            // Chỉ sort khi cần (view mới thêm/xóa/đổi depth)
+            if (_rootUI.IsDirtySort)
+            {
+                SortHierarchyByDepth();
+                _rootUI.IsDirtySort = false;
+            }
+
             Opened();
         }
 
@@ -232,26 +244,25 @@ namespace OSK
         {
             this.viewType = viewType;
             this.depthEdit = depth;
+            _rootUI.IsDirtySort = true;
             SortHierarchyByDepth();
+            _rootUI.IsDirtySort = false;
         }
 
         public void SortHierarchyByDepth()
         {
-            var container = _rootUI.ViewContainer; 
-            List<View> viewsInContainer = new List<View>();
-            for (int i = 0; i < container.childCount; i++)
-            {
-                var v = container.GetChild(i).GetComponent<View>();
-                if (v != null) viewsInContainer.Add(v);
-            }
- 
-            var sortedViews = viewsInContainer
-                .OrderBy(v => v.Depth)
-                .ToList();
+            // Dùng ListCacheView có sẵn thay vì GetComponent trên mọi child
+            var views = _rootUI.ListCacheView;
+            if (views == null || views.Count <= 1) return;
 
-            for (int i = 0; i < sortedViews.Count; i++)
-            { 
-                sortedViews[i].transform.SetSiblingIndex(i);
+            // Sort in-place — không tạo list mới (zero GC alloc)
+            views.Sort((a, b) => a.Depth.CompareTo(b.Depth));
+
+            // Chỉ SetSiblingIndex khi vị trí thực sự thay đổi
+            for (int i = 0; i < views.Count; i++)
+            {
+                if (views[i].transform.GetSiblingIndex() != i)
+                    views[i].transform.SetSiblingIndex(i);
             }
         }
 
@@ -260,7 +271,7 @@ namespace OSK
             if (!_isShowing) return;
 
             _isShowing = false;
-            MyLogger.Log($"[View] Hide {gameObject.name} is showing {_isShowing}");
+            IsClosing = true;
 
             if (_uiTransition != null)
                 _uiTransition.CloseTrans(FinalizeHide);
@@ -270,6 +281,7 @@ namespace OSK
         public void CloseImmediately()
         {
             _isShowing = false;
+            IsClosing = true;
 
             if (_uiTransition != null) _uiTransition.AnyClose(FinalizeImmediateClose);
             else FinalizeImmediateClose();
@@ -296,6 +308,7 @@ namespace OSK
 
         protected void FinalizeHide()
         {
+            IsClosing = false;
             OnClosed?.Invoke();
             OnClosed = null;
             gameObject.SetActive(false);
@@ -306,6 +319,7 @@ namespace OSK
 
         protected void FinalizeImmediateClose()
         {
+            IsClosing = false;
             gameObject.SetActive(false);
         }
 

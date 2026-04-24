@@ -25,101 +25,179 @@ namespace OSK
             }
         }
 
-
         public override void OnInit()
         {
             _rootUI = FindObjectOfType<RootUI>();
             if (_rootUI != null)
                 _rootUI.Initialize();
         }
- 
-        #region Views
 
-        public T Spawn<T>(string path, object[] data = null, bool cache = true, bool hidePrevView = false)
+        #region Spawn — Tạo view mới từ Resources hoặc prefab cache
+
+        /// <summary>
+        /// Spawn view từ Resources path. Nếu đã tồn tại thì Open thay vì spawn lại.
+        /// </summary>
+        public T Spawn<T>(string path, object[] data = null, bool cache = true, bool hidePrev = false)
             where T : View
         {
-            return RootUI.Spawn<T>(path, data, cache, hidePrevView);
+            return RootUI.Spawn<T>(path, data, cache, hidePrev);
         }
 
-        public T SpawnCache<T>(T view, object[] data = null, bool hidePrevView = false) where T : View
+        /// <summary>
+        /// Spawn view từ prefab reference. Nếu đã tồn tại thì Open.
+        /// </summary>
+        public T Spawn<T>(T prefab, object[] data = null, bool hidePrev = false) where T : View
         {
-            return RootUI.Spawn(view, data, hidePrevView);
+            return RootUI.Spawn(prefab, data, hidePrev);
         }
 
-        public T Open<T>(object[] data = null, bool hidePrevView = false) where T : View
+        #endregion
+
+        #region Open — Mở view đã spawn (hoặc auto-spawn nếu chưa có)
+
+        /// <summary>
+        /// Mở view theo type. Auto-spawn nếu chưa có trong cache.
+        /// </summary>
+        public T Open<T>(object[] data = null, bool hidePrev = false) where T : View
         {
-            return RootUI.Open<T>(data, hidePrevView);
-        }
-        
-        public void OpenAddStack<T>(object[] data = null, bool hidePrevView = false, Action<T> onOpened = null) where T : View
-        {
-             RootUI.OpenAddStack<T>(data, hidePrevView, onOpened);
-        }
-        
-        public void OpenAddStack(View view, object[] data = null, bool hidePrevView = false) 
-        {
-            RootUI.OpenAddStack(view, data, hidePrevView);
+            return RootUI.Open<T>(data, hidePrev);
         }
 
-        public View OpenPrevious(bool hidePrevView = false)
+        /// <summary>
+        /// Mở view theo instance reference.
+        /// </summary>
+        public void Open(View view, object[] data = null, bool hidePrev = false)
         {
-           return RootUI.OpenPrevious( isHidePrevPopup: hidePrevView);
+            RootUI.Open(view, data, hidePrev);
         }
 
-        public T TryOpen<T>(object[] data = null, bool isHidePrevPopup = false) where T : View
+        /// <summary>
+        /// Mở view, cho phép mở lại nếu đang showing (không skip).
+        /// </summary>
+        public T TryOpen<T>(object[] data = null, bool hidePrev = false) where T : View
         {
-            return RootUI.TryOpen<T>(data, isHidePrevPopup);
+            return RootUI.TryOpen<T>(data, hidePrev);
         }
 
-        public void Open(View view, object[] data = null, bool hidePrevView = false)
+        /// <summary>
+        /// Quay lại view trước trong history stack.
+        /// </summary>
+        public View OpenPrevious(bool hideCurrent = false)
         {
-            RootUI.Open(view, data, hidePrevView);
+            return RootUI.OpenPrevious(isHidePrevPopup: hideCurrent);
         }
 
+        /// <summary>
+        /// Mở alert dialog.
+        /// </summary>
         public AlertView OpenAlert<T>(AlertSetup setup) where T : AlertView
         {
             return RootUI.OpenAlert<T>(setup);
         }
 
+        #endregion
+
+        #region Enqueue — Xếp hàng views mở tuần tự theo priority
+
+        /// <summary>
+        /// Xếp hàng view để mở tuần tự. View tiếp theo mở khi view hiện tại đóng.
+        /// </summary>
+        public void EnqueueView<T>(object[] data = null, bool hidePrev = false, Action<T> onOpened = null) where T : View
+        {
+            RootUI.EnqueueView<T>(data, hidePrev, onOpened);
+        }
+
+        /// <summary>
+        /// Xếp hàng view instance để mở tuần tự.
+        /// </summary>
+        public void EnqueueView(View view, object[] data = null, bool hidePrev = false)
+        {
+            RootUI.EnqueueView(view, data, hidePrev);
+        }
+
+        #endregion
+
+        #region Hide — Ẩn views
+
+        /// <summary>
+        /// Ẩn 1 view cụ thể.
+        /// </summary>
         public void Hide(View view)
         {
             RootUI.Hide(view);
         }
 
+        /// <summary>
+        /// Ẩn tất cả views đang hiển thị.
+        /// </summary>
         public void HideAll()
         {
             RootUI.HideAll();
         }
 
-        public void HideAllIgnoreView<T>() where T : View
+        /// <summary>
+        /// Ẩn tất cả views NGOẠI TRỪ type T.
+        /// </summary>
+        public void HideAllExcept<T>() where T : View
         {
             RootUI.HideIgnore<T>();
         }
 
-        public void HideAllIgnoreView<T>(T[] viewsToKeep) where T : View
+        /// <summary>
+        /// Ẩn tất cả views NGOẠI TRỪ các view trong danh sách.
+        /// </summary>
+        public void HideAllExcept<T>(T[] viewsToKeep) where T : View
         {
             RootUI.HideIgnore(viewsToKeep);
         }
 
-        public void Delete<T>(T popup) where T : View
+        #endregion
+
+        #region Delete — Xóa hẳn view (destroy GameObject)
+
+        /// <summary>
+        /// Xóa view khỏi cache và destroy GameObject.
+        /// </summary>
+        public void Delete<T>(T view) where T : View
         {
-            RootUI.Delete<T>(popup);
+            RootUI.Delete<T>(view);
         }
 
+        #endregion
 
-        public T Get<T>(bool isInitOnScene = true) where T : View
+        #region Query — Truy vấn views
+
+        /// <summary>
+        /// Lấy view theo type từ cache.
+        /// </summary>
+        public T Get<T>() where T : View
         {
-            return RootUI.Get<T>(isInitOnScene);
-        } 
+            return RootUI.Get<T>(true);
+        }
 
+        /// <summary>
+        /// Kiểm tra view có đang hiển thị không.
+        /// </summary>
         public bool IsShowing(View view)
         {
-            return RootUI.Get<View>().IsShowing;
+            return view != null && view.IsShowing;
         }
 
-        public List<View> GetAll(bool isInitOnScene)
+        /// <summary>
+        /// Kiểm tra view type T có đang hiển thị không.
+        /// </summary>
+        public bool IsShowing<T>() where T : View
         {
-            return RootUI.GetAll(isInitOnScene);
+            var view = RootUI.Get<T>(true);
+            return view != null && view.IsShowing;
+        }
+
+        /// <summary>
+        /// Lấy tất cả views đã spawn.
+        /// </summary>
+        public List<View> GetAll()
+        {
+            return RootUI.GetAll(true);
         }
 
         #endregion

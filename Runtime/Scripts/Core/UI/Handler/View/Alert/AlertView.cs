@@ -19,6 +19,7 @@ namespace OSK
         public Button cancelButton;
         public float timeHide = 0;
         public AlertSetup alertSetup;
+        private Tween _autoHideTween;
 
         protected override void OnInit()
         {
@@ -100,11 +101,13 @@ namespace OSK
             if (time <= 0)
                 return;
             timeHide = time;
-            DOVirtual.DelayedCall(time, OnClose);
+            _autoHideTween?.Kill();
+            _autoHideTween = DOVirtual.DelayedCall(time, OnClose);
         }
 
         protected virtual void OnDisable()
         {
+            _autoHideTween?.Kill();
             okButton?.onClick.RemoveAllListeners();
             cancelButton?.onClick.RemoveAllListeners();
         }
@@ -117,6 +120,8 @@ namespace OSK
 
         public virtual void OnClose()
         {
+            _autoHideTween?.Kill();
+            _autoHideTween = null;
             MyLogger.Log("AlertView: OnClose called. Time hide left " + timeHide);
 
             if (alertSetup?.usePool ?? false) Main.Pool.Despawn(this);

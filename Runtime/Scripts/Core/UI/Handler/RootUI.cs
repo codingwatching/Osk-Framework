@@ -36,6 +36,9 @@ namespace OSK
 
         private bool _isProcessingQueue = false;
 
+        private readonly Dictionary<Type, View> _cacheByType = new();
+        private readonly Dictionary<Type, View> _initByType = new();
+
         #endregion
 
         #region References
@@ -64,6 +67,7 @@ namespace OSK
         public Camera UICamera => _uiCamera;
         public Transform ViewContainer => _viewContainer;
         public bool IsPortrait => isPortrait;
+        public bool IsDirtySort { get; set; } = true;
         #endregion
 
         public void Initialize()
@@ -127,16 +131,18 @@ namespace OSK
             }
  
             ListViewInit.Clear();
-            ListViewInit = listUIPopupSo.Select(view => view.view).ToList();
-            
-            // print error if any view is null
-            for (int i = 0; i < ListViewInit.Count; i++)
+            _initByType.Clear();
+
+            for (int i = 0; i < listUIPopupSo.Count; i++)
             {
-                var view = ListViewInit[i];
-                if (view == null)
+                var entry = listUIPopupSo[i];
+                if (entry.view == null)
                 {
                     MyLogger.LogError($"[View] ListViewInit[{i}] is null");
-                } 
+                    continue;
+                }
+                ListViewInit.Add(entry.view);
+                _initByType[entry.view.GetType()] = entry.view;
             }
 
             foreach (var view in ListViewInit)
@@ -167,8 +173,12 @@ namespace OSK
             var view = SpawnFromResource<T>(path);
             if (!cache) return view;
 
-            if (ListCacheView.Contains(view))
+            // FIX: was inverted (only added when already contained)
+            if (!ListCacheView.Contains(view))
+            {
                 ListCacheView.Add(view);
+                _cacheByType[typeof(T)] = view;
+            }
 
             return view;
         }
@@ -184,7 +194,11 @@ namespace OSK
 
             MyLogger.Log($"[View] Spawn view: {_view.name}");
             if (!ListCacheView.Contains(_view))
+            {
                 ListCacheView.Add(_view);
+                _cacheByType[_view.GetType()] = _view;
+                IsDirtySort = true;
+            }
             return _view;
         }
 
@@ -207,7 +221,11 @@ namespace OSK
 
         public View Open(View view, object[] data = null, bool hidePrevView = false, bool checkShowing = true)
         {
-            var _view = ListCacheView.FirstOrDefault(v => v.GetType() == view.GetType());
+            var viewType = view.GetType();
+
+            // O(1) cached lookup instead of LINQ FirstOrDefault
+            _cacheByType.TryGetValue(viewType, out var _view);
+
             if (hidePrevView && ListViewHistory.Count > 0)
             {
                 var prevView = ListViewHistory.Peek();
@@ -216,10 +234,10 @@ namespace OSK
 
             if (_view == null)
             {
-                var viewPrefab = ListViewInit.FirstOrDefault(v => v.GetType() == view.GetType());
+                _initByType.TryGetValue(viewType, out var viewPrefab);
                 if (viewPrefab == null)
                 {
-                    MyLogger.LogError($"[View] Can't find view prefab for type: {view.GetType().Name}");
+                    MyLogger.LogError($"[View] Can't find view prefab for type: {viewType.Name}");
                     return null;
                 }
 
@@ -240,7 +258,12 @@ namespace OSK
 
         public T Open<T>(object[] data = null, bool hidePrevView = false, bool checkShowing = true) where T : View
         {
-            var _view = ListCacheView.FirstOrDefault(v => v.GetType() == typeof(T)) as T;
+            var viewType = typeof(T);
+
+            // O(1) cached lookup instead of LINQ FirstOrDefault
+            _cacheByType.TryGetValue(viewType, out var cached);
+            var _view = cached as T;
+
             if (hidePrevView && ListViewHistory.Count > 0)
             {
                 var prevView = ListViewHistory.Peek();
@@ -249,7 +272,8 @@ namespace OSK
 
             if (_view == null)
             {
-                var viewPrefab = ListViewInit.FirstOrDefault(v => v.GetType() == typeof(T)) as T;
+                _initByType.TryGetValue(viewType, out var initPrefab);
+                var viewPrefab = initPrefab as T;
                 if (viewPrefab == null)
                 {
                     MyLogger.LogError($"[View] Can't find view prefab for type: {typeof(T).Name}");
@@ -276,7 +300,7 @@ namespace OSK
             return Open<T>(data, hidePrevView, false);
         }
         
-        public void OpenAddStack(View view, object[] data = null, bool hidePrevView = false)
+        public void EnqueueView(View view, object[] data = null, bool hidePrevView = false)
         {
             _queuedViews.Add(new QueuedView
             {
@@ -285,8 +309,8 @@ namespace OSK
                 hidePrevView = hidePrevView
             });
 
-            // Sort the queue by priority
-            _queuedViews = _queuedViews.OrderByDescending(q => q.view.Depth).ToList();
+            // Sort once on insert, not in coroutine loop
+            _queuedViews.Sort((a, b) => b.view.Depth.CompareTo(a.view.Depth));
 
             if (!_isProcessingQueue)
             {
@@ -294,16 +318,19 @@ namespace OSK
             }
         }
         
-        public void OpenAddStack<T>(object[] data = null, bool hidePrev = false, Action<T> onOpened = null) where T : View
+        public void EnqueueView<T>(object[] data = null, bool hidePrev = false, Action<T> onOpened = null) where T : View
         {
-            var _view = ListCacheView.FirstOrDefault(v => v is T) as T;
+            // O(1) cached lookup
+            _cacheByType.TryGetValue(typeof(T), out var cached);
+            var _view = cached as T;
 
             if (_view == null)
             {
-                var prefab = ListViewInit.FirstOrDefault(v => v is T) as T;
+                _initByType.TryGetValue(typeof(T), out var initPrefab);
+                var prefab = initPrefab as T;
                 if (prefab == null)
                 {
-                    MyLogger.LogError($"[OpenAddStack<{typeof(T).Name}>] Not found view prefab for type: {typeof(T).Name}");
+                    MyLogger.LogError($"[EnqueueView<{typeof(T).Name}>] Not found view prefab for type: {typeof(T).Name}");
                     return;
                 }
 
@@ -319,8 +346,8 @@ namespace OSK
             };
 
             _queuedViews.Add(queued);
- 
-            // Allways sort the queue by priority
+            _queuedViews.Sort((a, b) => b.view.Priority.CompareTo(a.view.Priority));
+
             if (!_isProcessingQueue)
                 StartCoroutine(ProcessQueue());
         }
@@ -332,15 +359,20 @@ namespace OSK
 
             while (_queuedViews.Count > 0)
             {
-                // Get the next view in the queue that is not showing
-                var next = _queuedViews
-                    .Where(q => q.view != null && !q.view.IsShowing)
-                    .OrderByDescending(q => q.view.Priority) //  Sort by priority
-                    .FirstOrDefault();
+                // Already sorted — find first non-showing view (no LINQ)
+                QueuedView next = null;
+                for (int i = 0; i < _queuedViews.Count; i++)
+                {
+                    var q = _queuedViews[i];
+                    if (q.view != null && !q.view.IsShowing)
+                    {
+                        next = q;
+                        break;
+                    }
+                }
 
                 if (next == null)
                 {
-                    //  All views are already showing or null, wait for next frame
                     yield return null;
                     continue;
                 }
@@ -348,9 +380,8 @@ namespace OSK
                 var openedView = Open(next.view, next.data, next.hidePrevView);
                 next.onOpened?.Invoke(openedView);
 
-                // Wait  until the view is closed
+                // Wait until the view is closed
                 yield return new WaitUntil(() => next.view == null || !next.view.IsShowing);
-                // Remove view from queue
                 _queuedViews.Remove(next);
             }
 
@@ -401,7 +432,9 @@ namespace OSK
         /// </summary>
         public AlertView OpenAlert<T>(AlertSetup setup) where T : AlertView
         {
-            var viewPrefab = ListViewInit.FirstOrDefault(v => v.GetType() == typeof(T)) as T;
+            // O(1) cached lookup
+            _initByType.TryGetValue(typeof(T), out var initPrefab);
+            var viewPrefab = initPrefab as T;
             if (viewPrefab == null)
             {
                 MyLogger.LogError($"[View] Can't find view prefab for type: {typeof(T).Name}");
@@ -437,7 +470,11 @@ namespace OSK
 
         public T Get<T>(bool isInitOnScene = true) where T : View
         {
-            var _view = GetAll(isInitOnScene).Find(x => x is T) as T;
+            // O(1) cached lookup
+            if (isInitOnScene && _cacheByType.TryGetValue(typeof(T), out var cached))
+                return cached as T;
+
+            var _view = GetAll(isInitOnScene)?.Find(x => x is T) as T;
             if (_view == null)
             {
                 MyLogger.LogError($"[View] Can't find view: {typeof(T).Name}");
@@ -664,42 +701,19 @@ namespace OSK
 
             MyLogger.Log($"[View] Delete view: {view.name}");
             ListCacheView.Remove(view);
+            _cacheByType.Remove(view.GetType());
+            IsDirtySort = true;
             action?.Invoke();
-            Destroy(view.gameObject);
-        }
 
-        #endregion
-
-        #region Sort oder
-
-        public List<View> GetSortedChildPages(Transform container)
-        {
-            List<View> childPages = new List<View>();
-            for (int i = 0; i < container.childCount; i++)
+            // Nếu từ Pool thì trả về Pool, ngược lại mới Destroy
+            if (Main.Pool.IsFromPool(view))
             {
-                var childPage = container.GetChild(i).GetComponent<View>();
-                if (childPage != null)
-                    childPages.Add(childPage);
+                Main.Pool.Despawn(view);
             }
-
-            return childPages;
-        }
-
-        public int FindInsertIndex(List<View> childPages, int targetDepth)
-        {
-            var sortedPages = childPages.OrderByDescending(v => v.Depth).ToList();
-            int left = 0;
-            int right = sortedPages.Count - 1;
-
-            while (left <= right)
+            else
             {
-                int mid = left + (right - left) / 2;
-                if (sortedPages[mid].Depth <= targetDepth)
-                    left = mid + 1;
-                else
-                    right = mid - 1;
+                Destroy(view.gameObject);
             }
-            return left;
         }
 
         #endregion
@@ -717,7 +731,7 @@ namespace OSK
 
         private bool IsExist<T>() where T : View
         {
-            return ListCacheView.Exists(x => x is T);
+            return _cacheByType.ContainsKey(typeof(T));
         }
 
         #endregion

@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace OSK
 {
-    public class AutoDespawn : MonoBehaviour, IPoolable
+    public class AutoDespawn : MonoBehaviour, IPoolable, IUpdateable
     {
         public float lifeTime = 2.0f;
         public bool isUsePool;
@@ -13,13 +13,15 @@ namespace OSK
         public void OnSpawn()
         {
             _timer = lifeTime;
+            Main.RegisterTick(this);
         }
 
         public void OnDespawn()
         {
+            Main.UnRegisterTick(this);
         }
 
-        private void Update()
+        public void OnUpdate()
         {
             if (_timer > 0)
             {

@@ -8,7 +8,7 @@ using UnityEngine.Audio;
 
 namespace OSK
 {
-    public partial class SoundManager : GameFrameworkComponent
+    public partial class SoundManager : GameFrameworkComponent, IUpdateable
     {
         [ReadOnly, SerializeField] private List<SoundData> _listSoundData = new List<SoundData>();
         [ReadOnly, SerializeField] private List<PlayingSound> _listSoundPlayings = new List<PlayingSound>();
@@ -67,7 +67,7 @@ namespace OSK
         private void OnApplicationPause(bool pause) => _pauseWhenInBackground = pause;
 #endif
 
-        private void Update() => CleanupStoppedSounds();
+        public void OnUpdate() => CleanupStoppedSounds();
 
         private void CleanupStoppedSounds()
         {

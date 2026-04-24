@@ -2,39 +2,6 @@
 
 The **OSK Framework** is a modular, high-performance Unity framework designed to streamline game development. It provides a robust suite of tools to manage core game systems like events, pooling, sound, and UI, ensuring scalability and maintainability for professional projects.
 
-**version 3.5.0 (Current)
-- **Performance Overhaul**: Integrated a centralized high-performance tick system (`IUpdateable`).
-- **Object Pooling 2.0**: O(1) performance optimization using `Stack` and `HashSet` containers.
-- **Workflow Improvement**: Added "Sync Modules" button for one-click hierarchy setup.
-- **Smart Lifecycle**: Automated tick registration/unregistration for pooled objects.
-- **Enhanced Debugging**: Centralized tick lists visible in the `Main` inspector.
-
-**version 3.1
-- Update debug, Add SheetDataManager
-- Fixbug
-
-**version 3.0
-- Update Editor UI, Sound SO
-- Fixbug
-
-**version 2.5.0
-- Remove UIParticle, Timer, ROP
-- Update EventBus, Resource, Singleton
-- Add Dependency
-
-**version 2.4.0
-- Remove State, DI, Network, Native GameFrameworkComponent
-- Fixbug
-
-**version 2.3.0
-- Remove SO Config and Module creation on Main
-- Fixbug sound, ui
-
-**version 2.2.0
-- Add auto bind Refs UI
-- Add set/get value default SoundDataSO
-
----
 
 ## **🌟 Key Features**
 

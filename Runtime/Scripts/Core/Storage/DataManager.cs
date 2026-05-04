@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace OSK
 {
-    public enum SaveType { Json, File, Xml }
+    public enum SaveType { Json, File, Xml, PlayerPrefs }
 
     public class DataManager : GameFrameworkComponent
     {
@@ -14,20 +14,25 @@ namespace OSK
         private readonly JsonSystem _json = new JsonSystem();
         private readonly FileSystem _file = new FileSystem();
         private readonly XMLSystem _xml = new XMLSystem();
+        private readonly PlayerPrefsSystem _prefs = new PlayerPrefsSystem();
 
         private readonly Dictionary<SaveType, IFile> _typeMap = new Dictionary<SaveType, IFile>();
 
         public override void OnInit()
         {
+            CleanupTempFiles();
+
 #if UNITY_WEBGL
             var _web = new WebJsonSystem();
             Register(SaveType.Json,_web);
             Register(SaveType.File, _web);
             Register(SaveType.Xml, _web);
+            Register(SaveType.PlayerPrefs, _prefs); // PlayerPrefs is natively cross-platform
 #else
             Register(SaveType.Json, _json);
             Register(SaveType.File, _file);
             Register(SaveType.Xml, _xml);
+            Register(SaveType.PlayerPrefs, _prefs);
 #endif
         }
 
@@ -40,11 +45,9 @@ namespace OSK
         public void Unregister(SaveType key) => _typeMap.Remove(key);
 
         // ---------- Synchronous APIs (enum-based) ----------
-        public void Save(SaveType type, string fileName, object data)
+        public void Save<T>(SaveType type, string fileName, T data)
         {
-            Debug .Log($"DataManager.Save: {fileName} ({type})");
             var fs = Resolve(type);
-            Debug .Log($"DataManager.fs: {fs})");
             
             if (fs == null)
             {
@@ -79,6 +82,66 @@ namespace OSK
             {
                 MyLogger.LogError($"DataManager.Load ERROR: {fileName} ({type})\n{ex}");
                 return default;
+            }
+        }
+
+        // ---------- Asynchronous APIs ----------
+        public async Cysharp.Threading.Tasks.UniTask SaveAsync<T>(SaveType type, string fileName, T data)
+        {
+            var fs = Resolve(type);
+            if (fs == null)
+            {
+                MyLogger.LogError($"DataManager.SaveAsync: Unknown SaveType {type}");
+                return;
+            }
+            try
+            {
+                await fs.SaveAsync(fileName, data, isEncrypt);
+            }
+            catch (Exception ex)
+            {
+                MyLogger.LogError($"DataManager.SaveAsync ERROR: {fileName} ({type})\n{ex}");
+            }
+        }
+
+        public async Cysharp.Threading.Tasks.UniTask<T> LoadAsync<T>(SaveType type, string fileName)
+        {
+            var fs = Resolve(type);
+            if (fs == null)
+            {
+                MyLogger.LogError($"DataManager.LoadAsync: Unknown SaveType {type}");
+                return default;
+            }
+
+            try
+            {
+                if (!fs.Exists(fileName)) return default;
+                return await fs.LoadAsync<T>(fileName, isEncrypt);
+            }
+            catch (Exception ex)
+            {
+                MyLogger.LogError($"DataManager.LoadAsync ERROR: {fileName} ({type})\n{ex}");
+                return default;
+            }
+        }
+        
+        public bool Exists(SaveType type, string fileName)
+        {
+            var fs = Resolve(type);
+            if (fs == null)
+            {
+                MyLogger.LogError($"DataManager.Exists: Unknown SaveType {type}");
+                return false;
+            }
+
+            try
+            {
+                return fs.Exists(fileName);
+            }
+            catch (Exception ex)
+            {
+                MyLogger.LogError($"DataManager.Exists ERROR: {fileName} ({type})\n{ex}");
+                return false;
             }
         }
 
@@ -137,5 +200,26 @@ namespace OSK
  
         // ---------- Internal helpers ----------
         private IFile Resolve(SaveType type) => _typeMap.GetValueOrDefault(type);
+
+        private void CleanupTempFiles()
+        {
+            try
+            {
+                string dir = IOUtility.GetDirectory();
+                if (System.IO.Directory.Exists(dir))
+                {
+                    string[] tempFiles = System.IO.Directory.GetFiles(dir, "*.tmp");
+                    foreach (var file in tempFiles)
+                    {
+                        System.IO.File.Delete(file);
+                        MyLogger.Log($"🧹 Deleted orphaned temp file: {file}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MyLogger.LogError($"CleanupTempFiles ERROR: {ex.Message}");
+            }
+        }
     }
 }

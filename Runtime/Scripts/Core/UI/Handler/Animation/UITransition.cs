@@ -27,6 +27,9 @@ namespace OSK
         private CanvasGroup _canvasGroup;
         private RectTransform _rectTransform;
 
+        private Vector2 _initAnchoredPosition;
+        private Vector3 _initLocalScale;
+
         private RectTransform TargetRectTransform => contentUI != null ? contentUI : _rectTransform;
 
         public void Initialize()
@@ -36,6 +39,9 @@ namespace OSK
 
             if (contentUI == null)
                 MyLogger.Log( $"contentUI not set, using RectTransform instead => {gameObject.name}");
+            
+            _initAnchoredPosition = TargetRectTransform.anchoredPosition;
+            _initLocalScale = TargetRectTransform.localScale;
         }
 
         public UniTask OpenTrans() => PlayTransition(_openingTweenSettings, true);
@@ -54,8 +60,8 @@ namespace OSK
             _canvasGroup.interactable = false;
             _canvasGroup.blocksRaycasts = false;
             
-            TargetRectTransform.localScale = Vector3.one;
-            TargetRectTransform.anchoredPosition = Vector2.zero;
+            TargetRectTransform.localScale = _initLocalScale;
+            TargetRectTransform.anchoredPosition = _initAnchoredPosition;
 
             onComplete?.Invoke();
         }
@@ -115,26 +121,26 @@ namespace OSK
                 {
                     case SlideType.SlideRight:
                         if (isOpen)
-                            TargetRectTransform.anchoredPosition = new Vector2(-TargetRectTransform.rect.width * settings.slideDistanceFactor, 0);
-                        seq.Join(TargetRectTransform.DOAnchorPosX(isOpen ? 0 : TargetRectTransform.rect.width * settings.slideDistanceFactor, settings.duration));
+                            TargetRectTransform.anchoredPosition = new Vector2(-TargetRectTransform.rect.width * settings.slideDistanceFactor + _initAnchoredPosition.x, _initAnchoredPosition.y);
+                        seq.Join(TargetRectTransform.DOAnchorPosX(isOpen ? _initAnchoredPosition.x : TargetRectTransform.rect.width * settings.slideDistanceFactor + _initAnchoredPosition.x, settings.duration));
                         break;
 
                     case SlideType.SlideLeft:
                         if (isOpen)
-                            TargetRectTransform.anchoredPosition = new Vector2(TargetRectTransform.rect.width * settings.slideDistanceFactor, 0);
-                        seq.Join(TargetRectTransform.DOAnchorPosX(isOpen ? 0 : -TargetRectTransform.rect.width * settings.slideDistanceFactor, settings.duration));
+                            TargetRectTransform.anchoredPosition = new Vector2(TargetRectTransform.rect.width * settings.slideDistanceFactor + _initAnchoredPosition.x, _initAnchoredPosition.y);
+                        seq.Join(TargetRectTransform.DOAnchorPosX(isOpen ? _initAnchoredPosition.x : -TargetRectTransform.rect.width * settings.slideDistanceFactor + _initAnchoredPosition.x, settings.duration));
                         break;
 
                     case SlideType.SlideUp:
                         if (isOpen)
-                            TargetRectTransform.anchoredPosition = new Vector2(0, -TargetRectTransform.rect.height * settings.slideDistanceFactor);
-                        seq.Join(TargetRectTransform.DOAnchorPosY(isOpen ? 0 : TargetRectTransform.rect.height * settings.slideDistanceFactor, settings.duration));
+                            TargetRectTransform.anchoredPosition = new Vector2(_initAnchoredPosition.x, -TargetRectTransform.rect.height * settings.slideDistanceFactor + _initAnchoredPosition.y);
+                        seq.Join(TargetRectTransform.DOAnchorPosY(isOpen ? _initAnchoredPosition.y : TargetRectTransform.rect.height * settings.slideDistanceFactor + _initAnchoredPosition.y, settings.duration));
                         break;
 
                     case SlideType.SlideDown:
                         if (isOpen)
-                            TargetRectTransform.anchoredPosition = new Vector2(0, TargetRectTransform.rect.height * settings.slideDistanceFactor);
-                        seq.Join(TargetRectTransform.DOAnchorPosY(isOpen ? 0 : -TargetRectTransform.rect.height * settings.slideDistanceFactor, settings.duration));
+                            TargetRectTransform.anchoredPosition = new Vector2(_initAnchoredPosition.x, TargetRectTransform.rect.height * settings.slideDistanceFactor + _initAnchoredPosition.y);
+                        seq.Join(TargetRectTransform.DOAnchorPosY(isOpen ? _initAnchoredPosition.y : -TargetRectTransform.rect.height * settings.slideDistanceFactor + _initAnchoredPosition.y, settings.duration));
                         break;
                 }
             }
@@ -186,8 +192,8 @@ namespace OSK
             DOTween.Kill(_canvasGroup);
 
             _canvasGroup.alpha = 1;
-            TargetRectTransform.localScale = Vector3.one;
-            TargetRectTransform.anchoredPosition = Vector2.zero;
+            TargetRectTransform.localScale = _initLocalScale;
+            TargetRectTransform.anchoredPosition = _initAnchoredPosition;
         }
     }
 }

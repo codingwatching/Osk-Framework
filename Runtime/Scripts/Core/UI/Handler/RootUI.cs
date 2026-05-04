@@ -133,23 +133,22 @@ namespace OSK
             ListViewInit.Clear();
             _initByType.Clear();
 
-            for (int i = 0; i < listUIPopupSo.Count; i++)
+            foreach (var entry in listUIPopupSo)
             {
-                var entry = listUIPopupSo[i];
                 if (entry.view == null)
                 {
-                    MyLogger.LogError($"[View] ListViewInit[{i}] is null");
+                    MyLogger.LogError("[View] Found a null view in ListViewSO. Skipping.");
                     continue;
                 }
+
+                // Lưu vào cache
                 ListViewInit.Add(entry.view);
                 _initByType[entry.view.GetType()] = entry.view;
-            }
 
-            foreach (var view in ListViewInit)
-            {
-                if (view.isPreloadSpawn)
+                // Khởi tạo luôn nếu được đánh dấu PreloadSpawn
+                if (entry.view.isPreloadSpawn)
                 {
-                    SpawnViewCache(view);
+                    SpawnViewCache(entry.view);
                 }
             }
         }
@@ -185,12 +184,10 @@ namespace OSK
 
         public T SpawnViewCache<T>(T view) where T : View
         {
-            var _view = Instantiate(view, _viewContainer);
+            // Instantiate với tham số thứ 3 = false để giữ nguyên Anchor, Position, Scale gốc của Prefab
+            var _view = Instantiate(view, _viewContainer, false);
             _view.gameObject.SetActive(false);
             _view.Initialize(this);
-
-            _view.transform.localPosition = Vector3.zero;
-            _view.transform.localScale = Vector3.one;
 
             MyLogger.Log($"[View] Spawn view: {_view.name}");
             if (!ListCacheView.Contains(_view))
@@ -204,12 +201,9 @@ namespace OSK
 
         public T SpawnAlert<T>(T view, bool usePool) where T : View
         {
-            T _view = usePool ? Main.Pool.Spawn<T>(KEY_POOL.KEY_UI_ALERT, view, _viewContainer) : Instantiate(view, _viewContainer);
+            T _view = usePool ? Main.Pool.Spawn<T>(KEY_POOL.KEY_UI_ALERT, view, _viewContainer) : Instantiate(view, _viewContainer, false);
             _view.gameObject.SetActive(true);
             _view.Initialize(this);
-
-            _view.transform.localPosition = Vector3.zero;
-            _view.transform.localScale = Vector3.one;
 
             MyLogger.Log($"[View] Spawn Alert view: {_view.name}");
             return _view;

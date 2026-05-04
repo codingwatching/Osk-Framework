@@ -15,6 +15,15 @@ namespace OSK
 
             PlayerPrefs.SetString(fileName, json);
             PlayerPrefs.Save();
+            
+            MyLogger.Log($"✅ Saved (Web/PlayerPrefs is instantly safe): {fileName}");
+        }
+
+        public Cysharp.Threading.Tasks.UniTask SaveAsync<T>(string fileName, T data, bool encrypt = false)
+        {
+            MyLogger.Log($"⏳ [Async] Web save is instantaneous, wrapping in UniTask: {fileName}");
+            Save(fileName, data, encrypt);
+            return Cysharp.Threading.Tasks.UniTask.CompletedTask;
         }
 
         public T Load<T>(string fileName, bool decrypt = false)
@@ -30,7 +39,14 @@ namespace OSK
                 json = Encoding.UTF8.GetString(bytes);
             }
 
+            MyLogger.Log($"✅ Loaded (Web): {fileName}");
             return JsonConvert.DeserializeObject<T>(json);
+        }
+
+        public Cysharp.Threading.Tasks.UniTask<T> LoadAsync<T>(string fileName, bool decrypt = false)
+        {
+            MyLogger.Log($"⏳ [Async] Web load is instantaneous, wrapping in UniTask: {fileName}");
+            return Cysharp.Threading.Tasks.UniTask.FromResult(Load<T>(fileName, decrypt));
         }
 
         public void Delete(string fileName)

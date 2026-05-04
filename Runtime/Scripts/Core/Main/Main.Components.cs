@@ -68,6 +68,11 @@ namespace OSK
         {
             gameObject.name = "======== [OSK Framework] ==========";
 
+            if (configInit != null) 
+            {
+                MyLogger.IsLogEnabled = configInit.IsEnableLogg;
+            }
+
             SingletonManager.Instance.RegisterGlobal(this);
             if (isDestroyingOnLoad)
                 DontDestroyOnLoad(gameObject);

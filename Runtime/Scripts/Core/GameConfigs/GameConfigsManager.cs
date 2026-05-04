@@ -30,7 +30,7 @@ namespace OSK
 
             if (PrefData.HasKey(key))
             {
-                string savedVersion = PrefData.GetString(key);
+                string savedVersion = Main.Data.Load<string>(SaveType.PlayerPrefs, key);
                 if (currentVersion != savedVersion)
                 {
                     // New version
@@ -46,8 +46,7 @@ namespace OSK
                 MyLogger.Log("First time version");
             } 
 
-            PrefData.SetString(key, currentVersion);
-            PrefData.Save();
+            Main.Data.Save(SaveType.PlayerPrefs,key, currentVersion);
         }
     }
 }

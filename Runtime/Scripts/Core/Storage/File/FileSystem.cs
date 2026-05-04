@@ -24,26 +24,51 @@ namespace OSK
         public void Save<T>(string fileName, T data, bool encrypt = false)
         {
             string path = ResolvePath(fileName);
+            SaveResolved(path, data, encrypt);
+        }
 
+        private void SaveResolved<T>(string path, T data, bool encrypt = false)
+        {
+            string tempPath = path + ".tmp";
             try
             {
-                string json = JsonConvert.SerializeObject(data, Formatting.None);
-                byte[] bytes = Encoding.UTF8.GetBytes(json);
-
-                using (BinaryWriter writer = new BinaryWriter(File.Open(path, FileMode.Create)))
+                var settings = new JsonSerializerSettings
                 {
-                    writer.Write(bytes.Length);
-                    writer.Write(bytes);
+                    ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+                    Converters = { new Vector3Converter(), new QuaternionConverter() }
+                };
+
+                byte[] bytes;
+                using (var ms = new MemoryStream())
+                {
+                    // 🚀 ULTRA OPTIMIZATION: Stream straight to bytes, avoid strings completely
+                    using (var sw = new StreamWriter(ms, new UTF8Encoding(false), 1024, true))
+                    using (var jw = new JsonTextWriter(sw) { Formatting = Formatting.None })
+                    {
+                        JsonSerializer.CreateDefault(settings).Serialize(jw, data);
+                    }
+                    bytes = ms.ToArray();
                 }
+
+                bytes = DataCompressor.Compress(bytes);
 
                 if (encrypt)
                 {
-                    var enc = FileSecurity.Encrypt(File.ReadAllBytes(path), IOUtility.encryptKey);
-                    File.WriteAllBytes(path, enc);
+                    bytes = FileSecurity.Encrypt(bytes, IOUtility.encryptKey);
                 }
 
-                RefreshEditor();
-                MyLogger.Log($"✅ Saved: {path}");
+                using (var fs = new FileStream(tempPath, FileMode.Create))
+                using (var bw = new BinaryWriter(fs))
+                {
+                    bw.Write(bytes.Length);
+                    bw.Write(bytes);
+                }
+
+                // Safe Save: Swap temp file with real file
+                if (File.Exists(path)) File.Delete(path);
+                File.Move(tempPath, path);
+
+                MyLogger.Log($"✅ Saved (Safe Save): {path}");
             }
             catch (Exception ex)
             {
@@ -51,9 +76,21 @@ namespace OSK
             }
         }
 
+        public async UniTask SaveAsync<T>(string fileName, T data, bool encrypt = false)
+        {
+            MyLogger.Log($"⏳ [Async] Starting background save for: {fileName}");
+            string path = ResolvePath(fileName); // MUST be on Main Thread
+            await UniTask.RunOnThreadPool(() => SaveResolved(path, data, encrypt));
+        }
+
         public T Load<T>(string fileName, bool decrypt = false)
         {
             string path = ResolvePath(fileName);
+            return LoadResolved<T>(path, decrypt);
+        }
+
+        private T LoadResolved<T>(string path, bool decrypt = false)
+        {
             if (!File.Exists(path))
             {
                 MyLogger.LogError($"❌ File not found: {path}");
@@ -68,16 +105,34 @@ namespace OSK
 
                 using var reader = new BinaryReader(new MemoryStream(bytes));
                 int len = reader.ReadInt32();
-                string json = Encoding.UTF8.GetString(reader.ReadBytes(len));
+                byte[] jsonBytes = reader.ReadBytes(len);
+
+                jsonBytes = DataCompressor.Decompress(jsonBytes);
 
                 MyLogger.Log($"✅ Loaded: {path}");
-                return JsonConvert.DeserializeObject<T>(json);
+                var settings = new JsonSerializerSettings { Converters = { new Vector3Converter(), new QuaternionConverter() } };
+                
+                // 🚀 ULTRA OPTIMIZATION: Stream bytes straight to deserializer
+                using (var ms = new MemoryStream(jsonBytes))
+                using (var sr = new StreamReader(ms, Encoding.UTF8))
+                using (var jr = new JsonTextReader(sr))
+                {
+                    var serializer = JsonSerializer.CreateDefault(settings);
+                    return serializer.Deserialize<T>(jr);
+                }
             }
             catch (Exception ex)
             {
                 MyLogger.LogError($"❌ Load Error: {Path.GetFileName(path)} → {ex.Message}");
                 return default;
             }
+        }
+
+        public async UniTask<T> LoadAsync<T>(string fileName, bool decrypt = false)
+        {
+            MyLogger.Log($"⏳ [Async] Starting background load for: {fileName}");
+            string path = ResolvePath(fileName); // MUST be on Main Thread
+            return await UniTask.RunOnThreadPool(() => LoadResolved<T>(path, decrypt));
         }
 
         public void Delete(string fileName) => IOUtility.DeleteFile(EnsureExtension(fileName, ".dat"));
@@ -89,7 +144,6 @@ namespace OSK
             string path = IOUtility.GetPath(EnsureExtension(fileName, ".txt"));
             File.WriteAllLines(path, lines);
             MyLogger.Log($"📝 Wrote lines to: {path}");
-            RefreshEditor();
         }
 
         public bool Exists(string fileName)
@@ -98,11 +152,6 @@ namespace OSK
             return File.Exists(path);
         }
 
-        private static void RefreshEditor()
-        {
-#if UNITY_EDITOR
-            UnityEditor.AssetDatabase.Refresh();
-#endif
-        }
+
     }
 }

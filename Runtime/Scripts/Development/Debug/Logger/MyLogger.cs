@@ -55,7 +55,8 @@ namespace OSK
         public static void ClearClass(string cls) => TreeData.Remove(cls);
         public static void ClearMethod(string cls, string meth) => TreeData[cls].Remove(meth);
 
-        public static bool RegisterAndCheck(string className, string methodName, string msg, string level, string file, int line)
+        public static bool RegisterAndCheck(string className, string methodName, string msg, string level, string file,
+            int line)
         {
             // Tự động lấy Class Name làm Channel gốc
             if (!TreeData.ContainsKey(className))
@@ -82,7 +83,17 @@ namespace OSK
 
     public static class MyLogger
     {
-        public static bool IsLogEnabled = true;
+        private static bool _isLogEnabled = true;
+        public static bool IsLogEnabled
+        {
+            get => _isLogEnabled;
+            set
+            {
+                _isLogEnabled = value;
+                Debug.unityLogger.logEnabled = value; // Tắt luôn log mặc định của Unity
+            }
+        }
+
         public static bool EnableStackTrace = false; // Tắt mặc định để tối ưu hiệu năng
 
         public delegate void OnLogFunc(string className, string message, Object context);
@@ -113,25 +124,27 @@ namespace OSK
         public static void LogIf(bool condition, string message, Object context = null)
         {
             if (!IsLogEnabled) return;
-            
+
             if (condition)
                 FinalLog("Log", message, context);
         }
+
         public static void LogWarningIf(bool condition, string message, Object context = null)
         {
             if (!IsLogEnabled) return;
-            
+
             if (condition)
                 FinalLog("Warning", message, context);
         }
+
         public static void LogErrorIf(bool condition, string message, Object context = null)
         {
             if (!IsLogEnabled) return;
-            
+
             if (condition)
                 FinalLog("Error", message, context);
         }
-        
+
         // Formatted Logs
         public static void LogFormat(string format, params object[] args)
         {
@@ -158,19 +171,18 @@ namespace OSK
             string json = JsonUtility.ToJson(obj, true);
             FinalLog("Log", json, context);
         }
-      
+
         // Log newtonsoft 
         public static void LogJsonNewtonsoft(object obj, Object context = null)
         {
             if (!IsLogEnabled) return;
-            
+
             string json = Newtonsoft.Json.JsonConvert.SerializeObject(obj, Newtonsoft.Json.Formatting.Indented);
             FinalLog("Log", json, context);
         }
 
-       private static void FinalLog(string level, string message, Object context = null)
+        private static void FinalLog(string level, string message, Object context = null)
         {
-
             string className = "Unknown";
             string methodName = "Unknown";
             string file = null;
@@ -223,7 +235,8 @@ namespace OSK
     {
         public static string Bold(this string str) => string.IsNullOrEmpty(str) ? string.Empty : $"<b>{str}</b>";
 
-        public static string Size(this string text, int size) => string.IsNullOrEmpty(text) ? string.Empty : $"<size={size}>{text}</size>";
+        public static string Size(this string text, int size) =>
+            string.IsNullOrEmpty(text) ? string.Empty : $"<size={size}>{text}</size>";
 
         public static string Italic(this string str) => string.IsNullOrEmpty(str) ? string.Empty : $"<i>{str}</i>";
 

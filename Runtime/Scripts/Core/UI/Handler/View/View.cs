@@ -190,7 +190,6 @@ namespace OSK
             IsClosing = false;
             gameObject.SetActive(true);
 
-            // Chỉ sort khi cần (view mới thêm/xóa/đổi depth)
             if (_rootUI.IsDirtySort)
             {
                 SortHierarchyByDepth();
@@ -222,11 +221,12 @@ namespace OSK
         {
             if (data == null || data.Length == 0)
             {
-                MyLogger.Log($"[SetData] No data passed to {GetType().Name}");
+                //MyLogger.Log($"[SetData] No data passed to {GetType().Name}");
                 return;
             }
 
             this.Data = data;
+            MyLogger.Log($"[SetData] {GetType().Name} received data: [{string.Join(", ", data.Select(d => d == null ? "null" : $"{d.GetType().Name}({d})"))}]");
         }
 
         public void SetTweenUIOpen(TweenSettings settings)
@@ -249,16 +249,13 @@ namespace OSK
             _rootUI.IsDirtySort = false;
         }
 
-        public void SortHierarchyByDepth()
+        private void SortHierarchyByDepth()
         {
-            // Dùng ListCacheView có sẵn thay vì GetComponent trên mọi child
             var views = _rootUI.ListCacheView;
             if (views == null || views.Count <= 1) return;
 
-            // Sort in-place — không tạo list mới (zero GC alloc)
             views.Sort((a, b) => a.Depth.CompareTo(b.Depth));
 
-            // Chỉ SetSiblingIndex khi vị trí thực sự thay đổi
             for (int i = 0; i < views.Count; i++)
             {
                 if (views[i].transform.GetSiblingIndex() != i)

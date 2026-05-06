@@ -61,7 +61,10 @@ namespace OSK
             }
 
             // Stop the clip
-            _editorAudioSource.Stop();
+            if (_editorAudioSource)
+            {
+                _editorAudioSource.Stop();
+            }
             if (audioObject)
             {
                 GameObject.DestroyImmediate(audioObject.gameObject);

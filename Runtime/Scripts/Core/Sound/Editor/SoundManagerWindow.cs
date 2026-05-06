@@ -20,6 +20,9 @@ namespace OSK
         private Dictionary<string, Dictionary<SoundType, bool>> soundTypeFoldoutsPerGroup = new Dictionary<string, Dictionary<SoundType, bool>>();
         private Dictionary<string, bool> groupFoldouts = new Dictionary<string, bool>();
 
+        // Track which rows have their detail panel expanded
+        private readonly HashSet<SoundData> _expandedRows = new HashSet<SoundData>();
+
         // --- library selection
         private string selectedGroup = null;
 
@@ -29,6 +32,20 @@ namespace OSK
         private Vector2 leftScroll;
         private Vector2 rightScroll;
         private string searchText = "";
+
+        // Spatial blend label cache
+        private static readonly string[] SpatialLabels = { "2D", "3D" };
+
+        // Type badge colors
+        private static readonly Dictionary<SoundType, Color> TypeColors = new Dictionary<SoundType, Color>
+        {
+            { SoundType.MUSIC, new Color(0.3f, 0.6f, 1f) },
+            { SoundType.SFX, new Color(0.3f, 0.85f, 0.4f) },
+            { SoundType.AMBIENCE, new Color(1f, 0.7f, 0.2f) },
+            { SoundType.VOICE, new Color(0.75f, 0.45f, 1f) },
+        };
+        private static GUIStyle _badgeStyle;
+        private static GUIStyle _clipLabelStyle;
 
         [MenuItem("OSK-Framework/Sound/Window")]
         public static void ShowWindow()
@@ -194,75 +211,52 @@ namespace OSK
                         .OrderBy(x => x)
                         .ToList();
 
+                    // ── Flat sound list (BroAudio style) ──
                     foreach (var group in activeGroups)
                     {
+                        var soundsInGroup = filteredMasterList.Where(s =>
+                            (string.IsNullOrEmpty(s.group) ? "Default" : s.group) == group
+                        ).ToList();
+
+                        if (soundsInGroup.Count == 0) continue;
+
                         if (!groupFoldouts.ContainsKey(group)) groupFoldouts[group] = true;
-                        Color headerColor = Color.white;
-                        if (group.ToLower().Contains("music")) headerColor = new Color(0.5f, 0.8f, 1f);
-                        else if (group.ToLower().Contains("ui")) headerColor = new Color(1f, 0.8f, 0.4f);
+                        groupFoldouts[group] = EditorGUILayout.Foldout(groupFoldouts[group], $"  {group}", true, EditorStyles.boldLabel);
 
-                        GUI.backgroundColor = headerColor;
-                        EditorGUILayout.BeginVertical("box");
-                        GUI.backgroundColor = Color.white;
-
-                        groupFoldouts[group] = EditorGUILayout.Foldout(groupFoldouts[group], $"📂 Group: {group.ToUpper()}", true, EditorStyles.boldLabel);
                         if (groupFoldouts[group])
                         {
-                            EditorGUI.indentLevel++;
-
-                            // Vẽ theo từng SoundType bên trong Group đã lọc
-                            foreach (SoundType type in Enum.GetValues(typeof(SoundType)))
-                            {
-                                var soundsInType = filteredMasterList.Where(s =>
-                                    (string.IsNullOrEmpty(s.group) ? "Default" : s.group) == group &&
-                                    s.type == type
-                                ).ToList();
-
-                                if (soundsInType.Count == 0) continue;
-
-                                if (!soundTypeFoldoutsPerGroup.ContainsKey(group))
-                                    soundTypeFoldoutsPerGroup[group] = new Dictionary<SoundType, bool>();
-
-                                if (!soundTypeFoldoutsPerGroup[group].ContainsKey(type))
-                                    soundTypeFoldoutsPerGroup[group][type] = true;
-
-                                soundTypeFoldoutsPerGroup[group][type] = EditorGUILayout.Foldout(soundTypeFoldoutsPerGroup[group][type], $"{type} ({soundsInType.Count})", true);
-
-                                if (soundTypeFoldoutsPerGroup[group][type])
-                                {
-                                    DrawTableHeader();
-
-                                    for (int i = 0; i < soundsInType.Count; i++)
-                                    {
-                                        DrawSoundRow(soundsInType[i]);
-                                    }
-                                }
-                            }
-
-                            EditorGUI.indentLevel--;
+                            for (int i = 0; i < soundsInGroup.Count; i++)
+                                DrawSoundEntry(soundsInGroup[i]);
                         }
-
-                        EditorGUILayout.EndVertical();
-                        EditorGUILayout.Space(2);
+                        GUILayout.Space(4);
                     }
 
-
-                    GUI.color = Color.green;
-                    if (GUILayout.Button("Add New Sound Info", GUILayout.Height(50)))
+                    // ── Bottom Add Button ──
+                    GUILayout.Space(8);
+                    EditorGUILayout.BeginHorizontal();
+                    GUILayout.FlexibleSpace();
+                    if (GUILayout.Button("+ Add New Sound", GUILayout.Width(140), GUILayout.Height(24)))
                     {
                         newSoundDraft = new SoundData
                         {
                             audioClip = null,
-                            id = "",
+                            id = "New Sound",
                             group = string.IsNullOrEmpty(selectedGroup) ? (listSoundSo.groupNames.Count > 0 ? listSoundSo.groupNames[0] : "Default") : selectedGroup,
                             type = SoundType.SFX,
                             volume = 1f,
                             mixerGroup = null,
-                            pitch = new MinMaxFloat(1f, 1f)
+                            pitch = new MinMaxFloat(1f, 1f),
+                            loop = false,
+                            priority = 128,
+                            spatialBlend = 0f,
+                            minDistance = 1,
+                            maxDistance = 500,
+                            playbackMode = PlaybackMode.Single,
+                            clips = new List<AudioClip>()
                         };
                     }
-
-                    GUI.color = Color.white;
+                    GUILayout.Space(4);
+                    EditorGUILayout.EndHorizontal();
 
                     if (newSoundDraft != null)
                         DrawNewSoundDraft();
@@ -280,105 +274,285 @@ namespace OSK
             EditorGUILayout.EndHorizontal();
         }
 
-        private void DrawTableHeader()
+        private void EnsureStyles()
         {
-            EditorGUILayout.BeginHorizontal();
-            EditorGUILayout.LabelField("Audio Clip", GUILayout.Width(220));
-            EditorGUILayout.LabelField("Group", GUILayout.Width(120));
-            EditorGUILayout.LabelField("Mixer Group", GUILayout.Width(120));
-            EditorGUILayout.LabelField("Type", GUILayout.Width(70));
-            EditorGUILayout.LabelField("Volume", GUILayout.Width(145));
-            EditorGUILayout.LabelField("Pitch", GUILayout.Width(75));
-            EditorGUILayout.LabelField("Min", GUILayout.Width(45));
-            EditorGUILayout.LabelField("Max", GUILayout.Width(75));
-            GUILayout.Label("Play", GUILayout.Width(40));
-            GUILayout.Label("Stop", GUILayout.Width(40));
-            GUILayout.Label("Remove", GUILayout.Width(50));
-            EditorGUILayout.EndHorizontal();
-            DrawRowBorder();
+            if (_badgeStyle == null)
+            {
+                _badgeStyle = new GUIStyle(GUI.skin.box)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontStyle = FontStyle.Bold,
+                    fontSize = 9,
+                    normal = { textColor = Color.white, background = Texture2D.whiteTexture },
+                    padding = new RectOffset(4, 4, 1, 1),
+                    margin = new RectOffset(2, 2, 2, 2)
+                };
+            }
+            if (_clipLabelStyle == null)
+            {
+                _clipLabelStyle = new GUIStyle(EditorStyles.label)
+                {
+                    fontSize = 12,
+                    alignment = TextAnchor.MiddleLeft,
+                };
+            }
         }
 
-        private void DrawSoundRow(SoundData soundData)
+        private void DrawSoundEntry(SoundData soundData)
         {
-            EditorGUILayout.BeginHorizontal();
+            EnsureStyles();
+            bool isExpanded = _expandedRows.Contains(soundData);
 
-            // Audio Clip
-            soundData.audioClip = (AudioClip)EditorGUILayout.ObjectField(soundData.audioClip, typeof(AudioClip), false, GUILayout.Width(220));
-            soundData.UpdateId();
+            // ── Row ──
+            Rect rowRect = EditorGUILayout.BeginHorizontal(GUILayout.Height(24));
+            EditorGUI.DrawRect(rowRect, isExpanded ? new Color(0.28f, 0.28f, 0.35f, 0.6f) : new Color(0f, 0f, 0f, 0.15f));
 
-            // Group Popup
-            int currentGroupIndex = Mathf.Max(0, listSoundSo.groupNames.IndexOf(soundData.group ?? "Default"));
-            int newGroupIdx = EditorGUILayout.Popup(currentGroupIndex, listSoundSo.groupNames.ToArray(), GUILayout.Width(120));
-            soundData.group = listSoundSo.groupNames[newGroupIdx];
+            GUILayout.Label("≡", EditorStyles.miniLabel, GUILayout.Width(14), GUILayout.Height(22));
 
-            // Mixer Popup 
-            string[] mixerGroupNames = listSoundSo.availableMixerGroups.Select(g => g != null ? g.name : "None").ToArray();
-            int currentMixerIndex = Mathf.Max(0, listSoundSo.availableMixerGroups.IndexOf(soundData.mixerGroup));
-            int newMixerIndex = EditorGUILayout.Popup(currentMixerIndex, mixerGroupNames, GUILayout.Width(120));
-            if (newMixerIndex != currentMixerIndex)
+            string arrow = isExpanded ? "▼" : "▶";
+            if (GUILayout.Button(arrow, new GUIStyle(EditorStyles.miniLabel) { fontSize = 10, alignment = TextAnchor.MiddleCenter }, GUILayout.Width(16), GUILayout.Height(22)))
             {
-                Undo.RecordObject(listSoundSo, "Change Mixer Group");
-                soundData.mixerGroup = listSoundSo.availableMixerGroups[newMixerIndex];
+                if (isExpanded) _expandedRows.Remove(soundData);
+                else _expandedRows.Add(soundData);
+            }
+
+            EditorGUI.BeginChangeCheck();
+            GUIStyle idEditStyle = new GUIStyle(EditorStyles.textField) { 
+                fontStyle = FontStyle.Bold, 
+                fixedHeight = 20,
+                margin = new RectOffset(0,0,2,0)
+            };
+            string newId = EditorGUILayout.TextField(soundData.id, idEditStyle, GUILayout.Width(200), GUILayout.Height(20));
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(listSoundSo, "Rename Sound");
+                soundData.id = newId;
+                EditorUtility.SetDirty(listSoundSo);
+            }
+            GUILayout.FlexibleSpace();
+
+            // Group badge
+            GUI.backgroundColor = new Color(0.2f, 0.2f, 0.2f, 0.8f);
+            int currentGroupIdx = listSoundSo.groupNames.IndexOf(soundData.group);
+            if (currentGroupIdx < 0) currentGroupIdx = 0;
+            
+            EditorGUI.BeginChangeCheck();
+            currentGroupIdx = EditorGUILayout.Popup(currentGroupIdx, listSoundSo.groupNames.ToArray(), _badgeStyle, GUILayout.Width(70), GUILayout.Height(18));
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(listSoundSo, "Change Sound Group");
+                soundData.group = listSoundSo.groupNames[currentGroupIdx];
                 EditorUtility.SetDirty(listSoundSo);
             }
 
-            // Type
-            soundData.type = (SoundType)EditorGUILayout.EnumPopup(soundData.type, GUILayout.Width(75));
-
-            // Volume
-            GUILayout.Label(EditorGUIUtility.IconContent("d_AudioSource Icon"), GUILayout.Width(20), GUILayout.Height(20));
-            soundData.volume = GUILayout.HorizontalSlider(soundData.volume, 0f, 1f, GUILayout.Width(75));
-            GUILayout.Label(soundData.volume.ToString("F1"), GUILayout.Width(25));
-
-
-            // Pitch 
-            GUILayout.Space(-10);
-            float oldMin = soundData.pitch.min;
-            float oldMax = soundData.pitch.max;
-            // Pitch Slider
-            Rect sliderRect = GUILayoutUtility.GetRect(100, 20, GUILayout.ExpandWidth(false));
-            float newMin = oldMin;
-            float newMax = oldMax;
-            EditorGUI.MinMaxSlider(sliderRect, ref newMin, ref newMax, 0.1f, 2.0f);
-            string minStr = newMin.ToString("F1");
-            string maxStr = newMax.ToString("F1");
-
-            GUILayout.Space(-5);
-            minStr = EditorGUILayout.DelayedTextField(minStr, GUILayout.Width(65));
-            GUILayout.Space(-15);
-            maxStr = EditorGUILayout.DelayedTextField(maxStr, GUILayout.Width(65));
-            if (float.TryParse(minStr, out float parsedMin))
+            // Type badge (Clickable to change)
+            Color badgeColor = TypeColors.ContainsKey(soundData.type) ? TypeColors[soundData.type] : Color.gray;
+            GUI.backgroundColor = badgeColor;
+            
+            EditorGUI.BeginChangeCheck();
+            soundData.type = (SoundType)EditorGUILayout.EnumPopup(soundData.type, _badgeStyle, GUILayout.Width(80), GUILayout.Height(18));
+            if (EditorGUI.EndChangeCheck())
             {
-                newMin = Mathf.Clamp(Mathf.Round(parsedMin * 10f) / 10f, 0.1f, newMax);
+                Undo.RecordObject(listSoundSo, "Change Sound Type");
+                EditorUtility.SetDirty(listSoundSo);
             }
+            GUI.backgroundColor = Color.white;
 
-            if (float.TryParse(maxStr, out float parsedMax))
+            // Remove button (X)
+            GUILayout.Space(4);
+            if (GUILayout.Button("✕", EditorStyles.miniButton, GUILayout.Width(22), GUILayout.Height(18)))
             {
-                newMax = Mathf.Clamp(Mathf.Round(parsedMax * 10f) / 10f, newMin, 2.0f);
-            }
-
-            if (Mathf.Abs(newMin - oldMin) > 0.01f || Mathf.Abs(newMax - oldMax) > 0.01f)
-            {
-                var newPitch = new MinMaxFloat(newMin, newMax);
-                soundData.pitch = newPitch;
-                soundData.SetPitch(newPitch);
-            }
-
-            GUILayout.Space(5);
-            // Play/Stop/Remove
-            if (GUILayout.Button("▶", GUILayout.Width(40))) soundData.Play(soundData.pitch);
-            if (GUILayout.Button("■", GUILayout.Width(40))) soundData.Stop();
-            if (GUILayout.Button("X", GUILayout.Width(50)))
-            {
-                if (EditorUtility.DisplayDialog("Delete", $"Remove {soundData.id}?", "Yes", "No"))
+                if (EditorUtility.DisplayDialog("Delete", $"Remove '{soundData.id}'?", "Yes", "No"))
                 {
                     Undo.RecordObject(listSoundSo, "Remove Sound");
                     listSoundSo.ListSoundInfos.Remove(soundData);
+                    _expandedRows.Remove(soundData);
                     EditorUtility.SetDirty(listSoundSo);
+                    GUIUtility.ExitGUI();
                 }
             }
+            GUILayout.Space(4);
 
             EditorGUILayout.EndHorizontal();
+
+            Rect lineRect = EditorGUILayout.GetControlRect(false, 1);
+            EditorGUI.DrawRect(lineRect, new Color(0.15f, 0.15f, 0.15f));
+
+            if (isExpanded)
+                DrawExpandedPanel(soundData);
+        }
+
+        private void DrawExpandedPanel(SoundData soundData)
+        {
+            Rect panelRect = EditorGUILayout.BeginVertical();
+            EditorGUI.DrawRect(panelRect, new Color(0.2f, 0.2f, 0.22f, 0.8f));
+            GUILayout.Space(4);
+            float lw = 120f, fw = 260f, ind = 16f;
+
+            EditorGUI.BeginChangeCheck();
+
+            // ID (call name)
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("ID (Call Name)", GUILayout.Width(lw));
+            soundData.id = EditorGUILayout.TextField(soundData.id, GUILayout.Width(fw));
+            EditorGUILayout.EndHorizontal();
+
+            // Clip (only visible if Single mode)
+            if (soundData.playbackMode == PlaybackMode.Single)
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Space(ind); GUILayout.Label("Audio Clip", GUILayout.Width(lw));
+                soundData.audioClip = (AudioClip)EditorGUILayout.ObjectField(soundData.audioClip, typeof(AudioClip), false, GUILayout.Width(fw));
+                if (string.IsNullOrEmpty(soundData.id)) soundData.UpdateId();
+                EditorGUILayout.EndHorizontal();
+            }
+
+            // Playback Mode
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Playback Mode", GUILayout.Width(lw));
+            soundData.playbackMode = (PlaybackMode)EditorGUILayout.EnumPopup(soundData.playbackMode, GUILayout.Width(fw));
+            EditorGUILayout.EndHorizontal();
+
+            // Clips list (only visible in Sequence/Random mode)
+            if (soundData.playbackMode != PlaybackMode.Single)
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Space(ind); GUILayout.Label("Clips", EditorStyles.boldLabel, GUILayout.Width(lw));
+                GUILayout.Label($"({soundData.clips.Count})", EditorStyles.miniLabel, GUILayout.Width(30));
+                if (GUILayout.Button("+", EditorStyles.miniButton, GUILayout.Width(20), GUILayout.Height(16)))
+                    soundData.clips.Add(null);
+                if (GUILayout.Button("-", EditorStyles.miniButton, GUILayout.Width(20), GUILayout.Height(16)))
+                {
+                    if (soundData.clips.Count > 0)
+                        soundData.clips.RemoveAt(soundData.clips.Count - 1);
+                }
+                EditorGUILayout.EndHorizontal();
+
+                for (int ci = 0; ci < soundData.clips.Count; ci++)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    GUILayout.Space(ind + 16);
+                    GUILayout.Label("▶", EditorStyles.miniLabel, GUILayout.Width(12));
+                    soundData.clips[ci] = (AudioClip)EditorGUILayout.ObjectField(soundData.clips[ci], typeof(AudioClip), false, GUILayout.Width(fw - 40));
+                    if (soundData.clips[ci] != null && GUILayout.Button("♫", EditorStyles.miniButton, GUILayout.Width(22), GUILayout.Height(16)))
+                        EditorAudioHelper.PlayClip(soundData.clips[ci]);
+                    EditorGUILayout.EndHorizontal();
+                }
+                GUILayout.Space(2);
+            }
+
+            // Type
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Type", GUILayout.Width(lw));
+            soundData.type = (SoundType)EditorGUILayout.EnumPopup(soundData.type, GUILayout.Width(fw));
+            EditorGUILayout.EndHorizontal();
+
+            // Group
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Group", GUILayout.Width(lw));
+            int gi = Mathf.Max(0, listSoundSo.groupNames.IndexOf(soundData.group ?? "Default"));
+            gi = EditorGUILayout.Popup(gi, listSoundSo.groupNames.ToArray(), GUILayout.Width(fw));
+            soundData.group = listSoundSo.groupNames[gi];
+            EditorGUILayout.EndHorizontal();
+
+            // Mixer
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Mixer Group", GUILayout.Width(lw));
+            var mn = listSoundSo.availableMixerGroups.Select(g => g != null ? g.name : "—").ToArray();
+            if (mn.Length == 0) mn = new[] { "—" };
+            int mi = Mathf.Max(0, listSoundSo.availableMixerGroups.IndexOf(soundData.mixerGroup));
+            int nm = EditorGUILayout.Popup(mi, mn, GUILayout.Width(fw));
+            if (nm != mi && nm < listSoundSo.availableMixerGroups.Count)
+            { Undo.RecordObject(listSoundSo, "Change Mixer"); soundData.mixerGroup = listSoundSo.availableMixerGroups[nm]; EditorUtility.SetDirty(listSoundSo); }
+            EditorGUILayout.EndHorizontal();
+
+            DrawPanelSeparator();
+
+            // Volume
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Master Volume", GUILayout.Width(lw));
+            soundData.volume = EditorGUILayout.Slider(soundData.volume, 0f, 1f, GUILayout.Width(fw));
+            EditorGUILayout.EndHorizontal();
+
+            // Priority
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Priority", GUILayout.Width(lw));
+            soundData.priority = EditorGUILayout.IntSlider(soundData.priority, 0, 256, GUILayout.Width(fw));
+            EditorGUILayout.EndHorizontal();
+
+            // Looping
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Looping", GUILayout.Width(lw));
+            soundData.loop = EditorGUILayout.Toggle("Loop", soundData.loop, GUILayout.Width(fw));
+            EditorGUILayout.EndHorizontal();
+
+            // Pitch
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Pitch Range", GUILayout.Width(lw));
+            float pMin = soundData.pitch.min, pMax = soundData.pitch.max;
+            pMin = EditorGUILayout.FloatField(pMin, GUILayout.Width(40));
+            EditorGUILayout.MinMaxSlider(ref pMin, ref pMax, 0.1f, 2f, GUILayout.Width(160));
+            pMax = EditorGUILayout.FloatField(pMax, GUILayout.Width(40));
+            pMin = Mathf.Clamp(Mathf.Round(pMin * 10f) / 10f, 0.1f, pMax);
+            pMax = Mathf.Clamp(Mathf.Round(pMax * 10f) / 10f, pMin, 2f);
+            if (Mathf.Abs(pMin - soundData.pitch.min) > 0.01f || Mathf.Abs(pMax - soundData.pitch.max) > 0.01f)
+                soundData.pitch = new MinMaxFloat(pMin, pMax);
+            EditorGUILayout.EndHorizontal();
+
+            DrawPanelSeparator();
+
+            // Spatial
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Spatial (3D Sound)", GUILayout.Width(lw));
+            soundData.spatialBlend = EditorGUILayout.Slider(soundData.spatialBlend, 0f, 1f, GUILayout.Width(200));
+            string dl = soundData.spatialBlend <= 0.01f ? "2D" : soundData.spatialBlend >= 0.99f ? "3D" : "Mix";
+            GUILayout.Label(dl, EditorStyles.miniLabel, GUILayout.Width(30));
+            EditorGUILayout.EndHorizontal();
+
+            using (new EditorGUI.DisabledGroupScope(soundData.spatialBlend <= 0f))
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Space(ind); GUILayout.Label("Min Distance", GUILayout.Width(lw));
+                soundData.minDistance = EditorGUILayout.IntField(soundData.minDistance, GUILayout.Width(60));
+                GUILayout.Space(20); GUILayout.Label("Max", GUILayout.Width(30));
+                soundData.maxDistance = EditorGUILayout.IntField(soundData.maxDistance, GUILayout.Width(60));
+                EditorGUILayout.EndHorizontal();
+            }
+
+            DrawPanelSeparator();
+
+            // Play / Stop / Remove
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind);
+            if (GUILayout.Button("▶ Play", GUILayout.Width(80), GUILayout.Height(20))) soundData.Play(soundData.pitch);
+            if (GUILayout.Button("■ Stop", GUILayout.Width(80), GUILayout.Height(20))) soundData.Stop();
+            GUILayout.FlexibleSpace();
+            GUI.color = new Color(1f, 0.4f, 0.4f);
+            if (GUILayout.Button("Remove", GUILayout.Width(70), GUILayout.Height(20)))
+            {
+                if (EditorUtility.DisplayDialog("Delete", $"Remove '{soundData.id}'?", "Yes", "No"))
+                { Undo.RecordObject(listSoundSo, "Remove Sound"); listSoundSo.ListSoundInfos.Remove(soundData); _expandedRows.Remove(soundData); EditorUtility.SetDirty(listSoundSo); }
+            }
+            GUI.color = Color.white;
+            EditorGUILayout.EndHorizontal();
+
+            GUILayout.Space(6);
+
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(listSoundSo, "Modify Sound");
+                EditorUtility.SetDirty(listSoundSo);
+            }
+
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawPanelSeparator()
+        {
+            GUILayout.Space(3);
+            Rect s = EditorGUILayout.GetControlRect(false, 1);
+            EditorGUI.DrawRect(s, new Color(0.35f, 0.35f, 0.35f));
+            GUILayout.Space(2);
         }
 
         private void DrawLibrarySidebarContents()
@@ -420,17 +594,25 @@ namespace OSK
                 GUI.backgroundColor = Color.white; // Reset màu sau khi vẽ nút
                 if (listSoundSo.groupNames.Contains(g))
                 {
-                    if (GUILayout.Button("x", GUILayout.Width(22), GUILayout.Height(22)))
+                    if (GUILayout.Button("✕", GUILayout.Width(22), GUILayout.Height(22)))
                     {
-                        bool ok = EditorUtility.DisplayDialog("Remove Group?", $"Remove group '{g}' from the editable list?", "Remove", "Cancel");
-                        if (ok)
+                        if (EditorUtility.DisplayDialog("Remove Group", $"Remove group '{g}' from list?", "Remove", "Cancel"))
                         {
+                            Undo.RecordObject(listSoundSo, "Remove Group");
                             listSoundSo.groupNames.Remove(g);
                             if (selectedGroup == g) selectedGroup = null;
-                            i--;
-                            EditorGUILayout.EndHorizontal();
-                            continue;
+                            EditorUtility.SetDirty(listSoundSo);
+                            GUIUtility.ExitGUI(); // Force immediate refresh
                         }
+                    }
+
+                    if (GUILayout.Button("✎", GUILayout.Width(22), GUILayout.Height(22)))
+                    {
+                        string oldName = g;
+                        AddGroupWindow.ShowPopup((string enteredName) =>
+                        {
+                            RenameGroup(oldName, enteredName);
+                        }, oldName, "Rename Group", "Rename");
                     }
                 }
 
@@ -482,6 +664,33 @@ namespace OSK
             GUILayout.FlexibleSpace();
         }
 
+        private void RenameGroup(string oldName, string newName)
+        {
+            if (string.IsNullOrEmpty(newName) || oldName == newName) return;
+            if (listSoundSo.groupNames.Contains(newName))
+            {
+                EditorUtility.DisplayDialog("Group exists", $"Group '{newName}' already exists.", "OK");
+                return;
+            }
+
+            Undo.RecordObject(listSoundSo, "Rename Group");
+
+            // Update the list of names
+            int idx = listSoundSo.groupNames.IndexOf(oldName);
+            if (idx >= 0) listSoundSo.groupNames[idx] = newName;
+
+            // Update all sounds that use this group
+            foreach (var sound in listSoundSo.ListSoundInfos)
+            {
+                if (sound.group == oldName || (string.IsNullOrEmpty(sound.group) && oldName == "Default"))
+                    sound.group = newName;
+            }
+
+            if (selectedGroup == oldName) selectedGroup = newName;
+
+            EditorUtility.SetDirty(listSoundSo);
+        }
+
         #region Draw Helpers
 
         private void DrawRowBorder()
@@ -518,23 +727,141 @@ namespace OSK
             EditorGUILayout.Space(10);
             EditorGUILayout.BeginVertical("box");
             EditorGUILayout.LabelField("➕ New Sound Draft", EditorStyles.boldLabel);
+            GUILayout.Space(4);
 
-            newSoundDraft.audioClip =
-                (AudioClip)EditorGUILayout.ObjectField("Audio Clip", newSoundDraft.audioClip, typeof(AudioClip), false);
+            float lw = 100; // Label width
+            float fw = 280; // Field width
+            float ind = 10; // Indentation
 
-            int groupIndex = Mathf.Max(0, listSoundSo.groupNames.IndexOf(newSoundDraft.group ?? (selectedGroup ?? listSoundSo.groupNames[0])));
-            if (groupIndex < 0) groupIndex = 0;
-            groupIndex = EditorGUILayout.Popup("Group", groupIndex, listSoundSo.groupNames.ToArray());
-            newSoundDraft.group = listSoundSo.groupNames[groupIndex];
-
-            newSoundDraft.type = (SoundType)EditorGUILayout.EnumPopup("Type", newSoundDraft.type);
-            newSoundDraft.volume = EditorGUILayout.Slider("Volume", newSoundDraft.volume, 0f, 1f);
-            float min = newSoundDraft.pitch.min, max = newSoundDraft.pitch.max;
-            EditorGUILayout.MinMaxSlider("Pitch", ref min, ref max, 0.1f, 2f);
-            newSoundDraft.pitch = new MinMaxFloat(min, max);
-
+            // ID / Name
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("Confirm Add", GUILayout.Width(120)))
+            GUILayout.Space(ind); GUILayout.Label("ID (Auto)", GUILayout.Width(lw));
+            string previewId = newSoundDraft.audioClip != null ? newSoundDraft.audioClip.name : "—";
+            EditorGUILayout.LabelField(previewId, EditorStyles.textField, GUILayout.Width(fw));
+            EditorGUILayout.EndHorizontal();
+
+            // Playback Mode
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Playback Mode", GUILayout.Width(lw));
+            newSoundDraft.playbackMode = (PlaybackMode)EditorGUILayout.EnumPopup(newSoundDraft.playbackMode, GUILayout.Width(fw));
+            EditorGUILayout.EndHorizontal();
+
+            // Clip (only visible if Single mode)
+            if (newSoundDraft.playbackMode == PlaybackMode.Single)
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Space(ind); GUILayout.Label("Audio Clip", GUILayout.Width(lw));
+                newSoundDraft.audioClip = (AudioClip)EditorGUILayout.ObjectField(newSoundDraft.audioClip, typeof(AudioClip), false, GUILayout.Width(fw));
+                EditorGUILayout.EndHorizontal();
+            }
+            else
+            {
+                // Clips list (Sequence/Random)
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Space(ind); GUILayout.Label("Clips", EditorStyles.boldLabel, GUILayout.Width(lw));
+                GUILayout.Label($"({newSoundDraft.clips.Count})", EditorStyles.miniLabel, GUILayout.Width(30));
+                if (GUILayout.Button("+", EditorStyles.miniButton, GUILayout.Width(20), GUILayout.Height(16)))
+                    newSoundDraft.clips.Add(null);
+                if (GUILayout.Button("-", EditorStyles.miniButton, GUILayout.Width(20), GUILayout.Height(16)))
+                {
+                    if (newSoundDraft.clips.Count > 0)
+                        newSoundDraft.clips.RemoveAt(newSoundDraft.clips.Count - 1);
+                }
+                EditorGUILayout.EndHorizontal();
+
+                for (int ci = 0; ci < newSoundDraft.clips.Count; ci++)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    GUILayout.Space(ind + 16);
+                    GUILayout.Label("▶", EditorStyles.miniLabel, GUILayout.Width(12));
+                    newSoundDraft.clips[ci] = (AudioClip)EditorGUILayout.ObjectField(newSoundDraft.clips[ci], typeof(AudioClip), false, GUILayout.Width(fw - 20));
+                    EditorGUILayout.EndHorizontal();
+                }
+                if (newSoundDraft.audioClip == null && newSoundDraft.clips.Count > 0) 
+                    newSoundDraft.audioClip = newSoundDraft.clips[0];
+            }
+
+            // Type
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Type", GUILayout.Width(lw));
+            newSoundDraft.type = (SoundType)EditorGUILayout.EnumPopup(newSoundDraft.type, GUILayout.Width(fw));
+            EditorGUILayout.EndHorizontal();
+
+            // Group
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Group", GUILayout.Width(lw));
+            int gi = Mathf.Max(0, listSoundSo.groupNames.IndexOf(newSoundDraft.group ?? (selectedGroup ?? "Default")));
+            gi = EditorGUILayout.Popup(gi, listSoundSo.groupNames.ToArray(), GUILayout.Width(fw));
+            newSoundDraft.group = listSoundSo.groupNames[gi];
+            EditorGUILayout.EndHorizontal();
+
+            // Mixer
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Mixer Group", GUILayout.Width(lw));
+            var mn = listSoundSo.availableMixerGroups.Select(g => g != null ? g.name : "—").ToArray();
+            if (mn.Length == 0) mn = new[] { "—" };
+            int mi = Mathf.Max(0, listSoundSo.availableMixerGroups.IndexOf(newSoundDraft.mixerGroup));
+            int nm = EditorGUILayout.Popup(mi, mn, GUILayout.Width(fw));
+            if (nm >= 0 && nm < listSoundSo.availableMixerGroups.Count) newSoundDraft.mixerGroup = listSoundSo.availableMixerGroups[nm];
+            EditorGUILayout.EndHorizontal();
+
+            DrawPanelSeparator();
+
+            // Volume
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Master Volume", GUILayout.Width(lw));
+            newSoundDraft.volume = EditorGUILayout.Slider(newSoundDraft.volume, 0f, 1f, GUILayout.Width(fw));
+            EditorGUILayout.EndHorizontal();
+
+            // Priority
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Priority", GUILayout.Width(lw));
+            newSoundDraft.priority = EditorGUILayout.IntSlider(newSoundDraft.priority, 0, 256, GUILayout.Width(fw));
+            EditorGUILayout.EndHorizontal();
+
+            // Looping
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Looping", GUILayout.Width(lw));
+            newSoundDraft.loop = EditorGUILayout.Toggle(newSoundDraft.loop, GUILayout.Width(fw));
+            EditorGUILayout.EndHorizontal();
+
+            // Pitch
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Pitch Range", GUILayout.Width(lw));
+            float pMin = newSoundDraft.pitch.min, pMax = newSoundDraft.pitch.max;
+            pMin = EditorGUILayout.FloatField(pMin, GUILayout.Width(40));
+            EditorGUILayout.MinMaxSlider(ref pMin, ref pMax, 0.1f, 2f, GUILayout.Width(fw - 90));
+            pMax = EditorGUILayout.FloatField(pMax, GUILayout.Width(40));
+            newSoundDraft.pitch = new MinMaxFloat(pMin, pMax);
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.Space(4);
+            EditorGUILayout.LabelField("Spatial Settings", EditorStyles.boldLabel);
+            
+            // Spatial Blend
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind); GUILayout.Label("Spatial Blend", GUILayout.Width(lw));
+            newSoundDraft.spatialBlend = EditorGUILayout.Slider(newSoundDraft.spatialBlend, 0f, 1f, GUILayout.Width(fw));
+            EditorGUILayout.EndHorizontal();
+
+            using (new EditorGUI.DisabledGroupScope(newSoundDraft.spatialBlend <= 0f))
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Space(ind); GUILayout.Label("Min Distance", GUILayout.Width(lw));
+                newSoundDraft.minDistance = EditorGUILayout.IntField(newSoundDraft.minDistance, GUILayout.Width(fw));
+                EditorGUILayout.EndHorizontal();
+
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Space(ind); GUILayout.Label("Max Distance", GUILayout.Width(lw));
+                newSoundDraft.maxDistance = EditorGUILayout.IntField(newSoundDraft.maxDistance, GUILayout.Width(fw));
+                EditorGUILayout.EndHorizontal();
+            }
+
+            EditorGUILayout.Space(8);
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Space(ind);
+            GUI.backgroundColor = Color.green;
+            if (GUILayout.Button("Confirm Add", GUILayout.Height(24), GUILayout.Width(120)))
             {
                 if (newSoundDraft.audioClip != null && listSoundSo != null)
                 {
@@ -545,13 +872,15 @@ namespace OSK
                     EditorUtility.SetDirty(listSoundSo);
                 }
             }
+            GUI.backgroundColor = Color.white;
 
-            if (GUILayout.Button("Cancel", GUILayout.Width(80)))
+            if (GUILayout.Button("Cancel", GUILayout.Height(24), GUILayout.Width(80)))
                 newSoundDraft = null;
             EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.EndVertical();
         }
+
 
         #endregion
 
@@ -795,16 +1124,19 @@ namespace OSK
         #endregion
     }
 
-// small modal popup to create new group
     public class AddGroupWindow : EditorWindow
     {
         private string newName = "NewGroup";
         private Action<string> onCreate;
+        private string _title = "Add Group";
+        private string _btnLabel = "Create";
 
-        public static void ShowPopup(Action<string> onCreate, string defaultName = "NewGroup")
+        public static void ShowPopup(Action<string> onCreate, string defaultName = "NewGroup", string title = "Add Group", string btnLabel = "Create")
         {
             var win = CreateInstance<AddGroupWindow>();
-            win.titleContent = new GUIContent("Add Group");
+            win.titleContent = new GUIContent(title);
+            win._title = title;
+            win._btnLabel = btnLabel;
             win.newName = defaultName;
             win.onCreate = onCreate;
             win.minSize = new Vector2(360, 80);
@@ -814,7 +1146,7 @@ namespace OSK
 
         private void OnGUI()
         {
-            EditorGUILayout.LabelField("Create new group", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(_title, EditorStyles.boldLabel);
             EditorGUILayout.Space(4);
             EditorGUI.BeginChangeCheck();
             newName = EditorGUILayout.TextField("Group Name", newName);
@@ -824,7 +1156,7 @@ namespace OSK
             }
 
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("Create", GUILayout.Height(26)))
+            if (GUILayout.Button(_btnLabel, GUILayout.Height(26)))
             {
                 string safe = newName.Trim();
                 if (string.IsNullOrEmpty(safe))

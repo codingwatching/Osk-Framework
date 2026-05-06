@@ -1,5 +1,5 @@
 using System;
-using System.Linq;
+using System.Collections.Generic;
 using DG.Tweening;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -108,8 +108,6 @@ namespace OSK
         /// <summary>
         ///  Play a sound with Id in list Sound SO using SoundSetup
         /// </summary>
-        /// <param name="soundSetup"></param>
-        /// <returns></returns>
         public AudioSource PlayID(SoundSetup soundSetup)
         {
             return Play(soundSetup.id, soundSetup.volumeFade, soundSetup.startTime, soundSetup.loop,
@@ -122,8 +120,6 @@ namespace OSK
         /// <summary>
         ///  Play a sound with ClipAudio using SoundSetup
         /// </summary>
-        /// <param name="soundSetup"></param>
-        /// <returns></returns>
         public AudioSource PlayClip(SoundSetup soundSetup)
         {
             return PlayAudioClip(soundSetup.audioClip, soundSetup.type, soundSetup.volumeFade, soundSetup.startTime,
@@ -135,30 +131,39 @@ namespace OSK
 
         #endregion
 
+        //─────────────────────────────────────────────────────────────
         #region Stop and Pause
 
+        /// <summary>
+        /// Stop all currently playing sounds and pending delayed plays.
+        /// </summary>
         public void StopAll()
         {
-            for (int i = 0; i < _listSoundPlayings.Count; i++)
+            // Reverse iteration to safely remove from list
+            for (int i = _listSoundPlayings.Count - 1; i >= 0; i--)
             {
-                _listSoundPlayings[i].AudioSource.Stop();
-                Main.Pool.Despawn(_listSoundPlayings[i].AudioSource);
-                _listSoundPlayings.RemoveAt(i);
-                i--;
-            } 
+                var p = _listSoundPlayings[i];
+                if (p.AudioSource != null) p.AudioSource.Stop();
+                p.KillTween();
+                if (p.AudioSource != null) Main.Pool.Despawn(p.AudioSource);
+                ReturnPlayingSound(p);
+            }
+            _listSoundPlayings.Clear();
             StopAllPendingAudios();
         }
 
         public void Stop(string id)
         {
-            for (int i = 0; i < _listSoundPlayings.Count; i++)
+            for (int i = _listSoundPlayings.Count - 1; i >= 0; i--)
             {
-                if (_listSoundPlayings[i].SoundData.id == id)
+                var p = _listSoundPlayings[i];
+                if (p.SoundData != null && p.SoundData.id == id)
                 {
-                    _listSoundPlayings[i].AudioSource.Stop();
-                    Main.Pool.Despawn(_listSoundPlayings[i].AudioSource);
+                    if (p.AudioSource != null) p.AudioSource.Stop();
+                    p.KillTween();
+                    if (p.AudioSource != null) Main.Pool.Despawn(p.AudioSource);
                     _listSoundPlayings.RemoveAt(i);
-                    i--;
+                    ReturnPlayingSound(p);
                 }
             }
             StopPendingAudio(id);
@@ -166,44 +171,127 @@ namespace OSK
 
         public void Stop(AudioClip clip)
         {
-            for (int i = 0; i < _listSoundPlayings.Count; i++)
+            if (clip == null) return;
+            for (int i = _listSoundPlayings.Count - 1; i >= 0; i--)
             {
-                if (_listSoundPlayings[i].AudioSource.clip == clip)
+                var p = _listSoundPlayings[i];
+                if (p.AudioSource != null && p.AudioSource.clip == clip)
                 {
-                    _listSoundPlayings[i].AudioSource.Stop();
-                    Main.Pool.Despawn(_listSoundPlayings[i].AudioSource);
+                    p.AudioSource.Stop();
+                    p.KillTween();
+                    Main.Pool.Despawn(p.AudioSource);
                     _listSoundPlayings.RemoveAt(i);
-                    i--;
+                    ReturnPlayingSound(p);
                 }
             }
             StopPendingAudio(clip.name);
         }
 
-
         public void Stop(SoundType type)
         {
-            for (int i = 0; i < _listSoundPlayings.Count; i++)
+            for (int i = _listSoundPlayings.Count - 1; i >= 0; i--)
             {
-                if (_listSoundPlayings[i].SoundData.type == type)
+                var p = _listSoundPlayings[i];
+                if (p.SoundData != null && p.SoundData.type == type)
                 {
-                    _listSoundPlayings[i].AudioSource.Stop();
-                    Main.Pool.Despawn(_listSoundPlayings[i].AudioSource);
+                    if (p.AudioSource != null) p.AudioSource.Stop();
+                    p.KillTween();
+                    if (p.AudioSource != null) Main.Pool.Despawn(p.AudioSource);
                     _listSoundPlayings.RemoveAt(i);
-                    i--;
+                    ReturnPlayingSound(p);
                 }
             }
-
-            StopPendingAudio(type.ToString());
+            // FIX: Previously used type.ToString() which never matched any clip name key
+            StopAllPendingAudiosByType(type);
         }
-        
+
+        //─────────────────────────────────────────────────────────────
+        #region Fade Stop
+
+        /// <summary>
+        /// Stop a sound by id with a smooth fade-out transition.
+        /// </summary>
+        public void StopWithFade(string id, float fadeDuration = 0.5f)
+        {
+            for (int i = _listSoundPlayings.Count - 1; i >= 0; i--)
+            {
+                var p = _listSoundPlayings[i];
+                if (p.SoundData != null && p.SoundData.id == id && p.AudioSource != null)
+                {
+                    FadeOutAndStop(p, fadeDuration);
+                }
+            }
+            StopPendingAudio(id);
+        }
+
+        /// <summary>
+        /// Stop all sounds of a type with a smooth fade-out transition.
+        /// </summary>
+        public void StopWithFade(SoundType type, float fadeDuration = 0.5f)
+        {
+            for (int i = _listSoundPlayings.Count - 1; i >= 0; i--)
+            {
+                var p = _listSoundPlayings[i];
+                if (p.SoundData != null && p.SoundData.type == type && p.AudioSource != null)
+                {
+                    FadeOutAndStop(p, fadeDuration);
+                }
+            }
+            StopAllPendingAudiosByType(type);
+        }
+
+        /// <summary>
+        /// Stop all sounds with a smooth fade-out transition.
+        /// </summary>
+        public void StopAllWithFade(float fadeDuration = 0.5f)
+        {
+            for (int i = _listSoundPlayings.Count - 1; i >= 0; i--)
+            {
+                var p = _listSoundPlayings[i];
+                if (p.AudioSource != null)
+                {
+                    FadeOutAndStop(p, fadeDuration);
+                }
+            }
+            StopAllPendingAudios();
+        }
+
+        private void FadeOutAndStop(PlayingSound playing, float duration)
+        {
+            if (playing == null || playing.AudioSource == null) return;
+            playing.KillTween();
+            
+            var source = playing.AudioSource;
+            float startVolume = source.volume;
+            
+            playing.VolumeTween = DOVirtual.Float(startVolume, 0f, duration, v =>
+            {
+                if (source != null)
+                    source.volume = v;
+            }).OnComplete(() =>
+            {
+                if (source != null)
+                {
+                    source.Stop();
+                    Main.Pool.Despawn(source);
+                }
+                _listSoundPlayings.Remove(playing);
+                ReturnPlayingSound(playing);
+            });
+        }
+
+        #endregion
+
+        //─────────────────────────────────────────────────────────────
+        #region Pending Audio
+
         public void StopPendingAudio(string clipId)
         {
+            if (string.IsNullOrEmpty(clipId)) return;
             if (_playingTweens.TryGetValue(clipId, out var tween))
             {
-                if (tween.IsActive())
-                {
+                if (tween != null && tween.IsActive())
                     tween.Kill();
-                } // Kill tween
                 _playingTweens.Remove(clipId);
             }
         }
@@ -212,90 +300,117 @@ namespace OSK
         {
             foreach (var tween in _playingTweens.Values)
             {
-                if (tween.IsActive())
-                {
+                if (tween != null && tween.IsActive())
                     tween.Kill();
-                } // Kill all tweens
             }
             _playingTweens.Clear();
         }
+        
+        /// <summary>
+        /// FIX: Stop all pending delayed plays for sounds of a specific type.
+        /// Previously Stop(SoundType) used type.ToString() as key which never matched.
+        /// </summary>
+        private void StopAllPendingAudiosByType(SoundType type)
+        {
+            // Collect keys to remove (avoid modifying dict during iteration)
+            var keysToRemove = new List<string>();
+            foreach (var kvp in _playingTweens)
+            {
+                var data = GetSoundInfo(kvp.Key);
+                if (data != null && data.type == type)
+                {
+                    if (kvp.Value != null && kvp.Value.IsActive())
+                        kvp.Value.Kill();
+                    keysToRemove.Add(kvp.Key);
+                }
+            }
+            for (int i = 0; i < keysToRemove.Count; i++)
+                _playingTweens.Remove(keysToRemove[i]);
+        }
 
+        #endregion
 
+        //─────────────────────────────────────────────────────────────
         public void PauseAll()
         {
-            foreach (var playingSound in _listSoundPlayings)
+            for (int i = 0; i < _listSoundPlayings.Count; i++)
             {
-                playingSound.AudioSource.Pause();
-                playingSound.IsPaused = true;
+                var p = _listSoundPlayings[i];
+                if (p.AudioSource != null)
+                {
+                    p.AudioSource.Pause();
+                    p.IsPaused = true;
+                }
             }
         }
 
         public void Pause(SoundType type)
         {
-            foreach (var playingSound in _listSoundPlayings)
+            for (int i = 0; i < _listSoundPlayings.Count; i++)
             {
-                if (playingSound.SoundData.type == type)
+                var p = _listSoundPlayings[i];
+                if (p.SoundData != null && p.SoundData.type == type && p.AudioSource != null)
                 {
-                    playingSound.IsPaused = true;
-                    playingSound.AudioSource.Pause();
+                    p.IsPaused = true;
+                    p.AudioSource.Pause();
                 }
             }
         }
 
         public void ResumeAll()
         {
-            foreach (var playingSound in _listSoundPlayings)
+            for (int i = 0; i < _listSoundPlayings.Count; i++)
             {
-                playingSound.IsPaused = false;
-                playingSound.AudioSource.UnPause();
+                var p = _listSoundPlayings[i];
+                if (p.AudioSource != null)
+                {
+                    p.IsPaused = false;
+                    p.AudioSource.UnPause();
+                }
             }
         }
 
         public void Resume(SoundType type)
         {
-            foreach (var playingSound in _listSoundPlayings)
+            for (int i = 0; i < _listSoundPlayings.Count; i++)
             {
-                if (playingSound.SoundData.type == type)
+                var p = _listSoundPlayings[i];
+                if (p.SoundData != null && p.SoundData.type == type && p.AudioSource != null)
                 {
-                    playingSound.AudioSource.UnPause();
-                    playingSound.IsPaused = false;
+                    p.AudioSource.UnPause();
+                    p.IsPaused = false;
                 }
             }
         }
 
         #endregion
 
+        //─────────────────────────────────────────────────────────────
         #region Status
 
         public void SetMixerGroup(AudioMixerGroup mixerGroup)
         {
             if (_listSoundPlayings == null || _listSoundPlayings.Count == 0) return;
-            foreach (var playing in _listSoundPlayings.Where(playing => playing.AudioSource != null))
+            for (int i = 0; i < _listSoundPlayings.Count; i++)
             {
-                playing.AudioSource.outputAudioMixerGroup = mixerGroup;
+                var p = _listSoundPlayings[i];
+                if (p.AudioSource != null)
+                    p.AudioSource.outputAudioMixerGroup = mixerGroup;
             }
         }
 
         public void SetStatusSoundType(SoundType type, bool isOn)
         {
-            if (type == SoundType.MUSIC)
+            SetSoundTypeEnabled(type, isOn);
+            if (isOn)
             {
-                IsEnableMusic = isOn;
-                if (IsEnableMusic)
-                {
-                    Resume(SoundType.MUSIC);
+                Resume(type);
+                if (type == SoundType.MUSIC)
                     RefreshSoundSettings();
-                }
-                else
-                    Pause(SoundType.MUSIC);
             }
-            else if (type == SoundType.SFX)
+            else
             {
-                IsEnableSoundSFX = isOn;
-                if (IsEnableSoundSFX)
-                    Resume(SoundType.SFX);
-                else
-                    Pause(SoundType.SFX);
+                Pause(type);
             }
         }
 
@@ -304,6 +419,8 @@ namespace OSK
         {
             IsEnableMusic = isOn;
             IsEnableSoundSFX = isOn;
+            IsEnableAmbience = isOn;
+            IsEnableVoice = isOn;
 
             if (!isOn)
             {
@@ -320,10 +437,13 @@ namespace OSK
         {
             if (!IsEnableMusic || _pendingMusic.Count <= 0) return;
             
-            foreach (var music in _pendingMusic.ToList())
+            // Copy to temp list to avoid modification during iteration
+            var pending = new List<SoundData>(_pendingMusic);
+            _pendingMusic.Clear();
+            
+            for (int i = 0; i < pending.Count; i++)
             {
-                Play(music.id, loop: true);
-                _pendingMusic.Remove(music);
+                Play(pending[i].id, loop: true);
             }
         }
 
@@ -331,70 +451,110 @@ namespace OSK
         {
             MusicVolume = volume;
             SFXVolume = volume;
+            AmbienceVolume = volume;
+            VoiceVolume = volume;
 
-            foreach (var s in _listSoundPlayings)
+            for (int i = 0; i < _listSoundPlayings.Count; i++)
             {
-                float multiplier = s.SoundData.type == SoundType.MUSIC ? MusicVolume : SFXVolume;
+                var s = _listSoundPlayings[i];
+                if (s.AudioSource == null || s.SoundData == null) continue;
+                float multiplier = GetVolumeMultiplier(s.SoundData.type);
                 s.AudioSource.volume = s.RawVolume * multiplier;
             }
         }
 
         public void SetAllVolume(SoundType type, float volume)
         {
-            if (type == SoundType.MUSIC) MusicVolume = volume;
-            else if (type == SoundType.SFX) SFXVolume = volume;
+            SetVolumeForType(type, volume);
 
-            foreach (var s in _listSoundPlayings)
+            for (int i = 0; i < _listSoundPlayings.Count; i++)
             {
-                if (s.SoundData.type == type)
+                var s = _listSoundPlayings[i];
+                if (s.SoundData != null && s.SoundData.type == type && s.AudioSource != null)
                 {
-                    float multiplier = type == SoundType.MUSIC ? MusicVolume : SFXVolume;
-                    s.AudioSource.volume = s.RawVolume * multiplier;
+                    s.AudioSource.volume = s.RawVolume * GetVolumeMultiplier(type);
                 }
             }
         }
 
-        public float VolumeFade(float volumeStart, float volumeEnd, float duration)
+        /// <summary>
+        /// Create a volume fade tween. Returns the Tween for chaining.
+        /// Replaces the old broken VolumeFade() that always returned 0.
+        /// </summary>
+        public Tween FadeVolume(float from, float to, float duration, Action<float> onUpdate = null)
         {
-            float volume = 0;
-            DOVirtual.Float(volumeStart, volumeEnd, duration, value => { volume = value; });
-            return volume;
+            return DOVirtual.Float(from, to, duration, v => onUpdate?.Invoke(v));
         }
 
         public AudioClip GetAudioClipInSO(string id)
         {
-            return (from t in _listSoundData where t.id == id select t.audioClip).FirstOrDefault();
+            var data = GetSoundInfo(id);
+            return data?.audioClip;
         }
 
         public AudioClip GetAudioClipInSO(AudioClip audioClip)
         {
-            return (from t in _listSoundData where t.audioClip == audioClip select t.audioClip).FirstOrDefault();
+            var data = GetSoundInfo(audioClip);
+            return data?.audioClip;
         }
 
         public AudioClip GetAudioClipOnScene(string id)
         {
-            return (from t in _listSoundPlayings where t.SoundData.id == id select t.AudioSource.clip).FirstOrDefault();
+            for (int i = 0; i < _listSoundPlayings.Count; i++)
+            {
+                if (_listSoundPlayings[i].SoundData != null && _listSoundPlayings[i].SoundData.id == id)
+                    return _listSoundPlayings[i].AudioSource?.clip;
+            }
+            return null;
         }
 
         #endregion
 
+        //─────────────────────────────────────────────────────────────
         #region Dispose
 
+        /// <summary>
+        /// Despawn an AudioSource with optional delay. Includes null-safety for clip access.
+        /// </summary>
         public void Despawn(AudioSource audioSource, float delay = 0)
         {
-            DespawnAudioSource(audioSource, delay).Run();
-            StopPendingAudio(audioSource.clip.name);
+            if (audioSource == null) return;
+
+            // Find and cleanup the PlayingSound entry
+            for (int i = _listSoundPlayings.Count - 1; i >= 0; i--)
+            {
+                if (_listSoundPlayings[i].AudioSource == audioSource)
+                {
+                    var p = _listSoundPlayings[i];
+                    p.KillTween();
+                    _listSoundPlayings.RemoveAt(i);
+                    ReturnPlayingSound(p);
+                    break;
+                }
+            }
+            
+            if (delay > 0)
+                DespawnAudioSource(audioSource, delay).Run();
+            else
+                Main.Pool.Despawn(audioSource);
+            
+            // FIX: Null check for clip before accessing name
+            if (audioSource.clip != null)
+                StopPendingAudio(audioSource.clip.name);
         }
 
         public void DespawnMusicID(string id, float delay = 0)
         {
-            for (int i = 0; i < _listSoundPlayings.Count; i++)
+            for (int i = _listSoundPlayings.Count - 1; i >= 0; i--)
             {
-                if (_listSoundPlayings[i].SoundData.id == id)
+                var p = _listSoundPlayings[i];
+                if (p.SoundData != null && p.SoundData.id == id)
                 {
-                    DespawnAudioSource(_listSoundPlayings[i].AudioSource, delay).Run();
+                    p.KillTween();
+                    if (p.AudioSource != null)
+                        DespawnAudioSource(p.AudioSource, delay).Run();
                     _listSoundPlayings.RemoveAt(i);
-                    i--;
+                    ReturnPlayingSound(p);
                 }
             }
         }
@@ -403,7 +563,11 @@ namespace OSK
         {
             for (int i = _listSoundPlayings.Count - 1; i >= 0; i--)
             {
-                Destroy(_listSoundPlayings[i].AudioSource);
+                var p = _listSoundPlayings[i];
+                p.KillTween();
+                if (p.AudioSource != null)
+                    Destroy(p.AudioSource);
+                ReturnPlayingSound(p);
             }
             StopAllPendingAudios();
 

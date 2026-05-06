@@ -38,7 +38,7 @@ namespace OSK
         public bool showMixerSettings = true;
         public List<AudioMixerGroup> availableMixerGroups = new List<AudioMixerGroup>();
 
-        public List<string> groupNames = new List<string>() { "Music", "UI", "Default" };
+        public List<string> groupNames = new List<string>() { "Default" };
         
 #if UNITY_EDITOR 
         private void OnValidate()

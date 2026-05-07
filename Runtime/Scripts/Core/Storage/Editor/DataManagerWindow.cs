@@ -34,7 +34,10 @@ namespace OSK
         private string _customPath = ""; // Lưu đường dẫn khi chọn Custom
         private string _selectedFilePath;
         private string _fileContentBuffer;
+        private string _decryptedContentBuffer;
+        private bool _viewDecrypted = false;
  
+        private DateTime _lastFileWriteTime;
         private DataManager _dataManager;
         private DataManager Data => _dataManager;
         
@@ -72,6 +75,52 @@ namespace OSK
         {
             if (string.IsNullOrEmpty(_customPath)) 
                 _customPath = Application.persistentDataPath;
+                
+            RefreshDataManager();
+        }
+
+        private void OnFocus()
+        {
+            CheckForExternalChanges();
+            RefreshDataManager();
+        }
+
+        private void Update()
+        {
+            // Optional: periodically check even if focused
+            if (EditorApplication.timeSinceStartup % 2 < 0.05f) 
+            {
+                CheckForExternalChanges();
+            }
+        }
+
+        private void RefreshDataManager()
+        {
+            if (_dataManager == null && Application.isPlaying)
+            {
+                _dataManager = FindObjectOfType<DataManager>();
+            }
+        }
+
+        private void CheckForExternalChanges()
+        {
+            if (string.IsNullOrEmpty(_selectedFilePath) || !File.Exists(_selectedFilePath) || _isEditing) return;
+
+            var currentWriteTime = File.GetLastWriteTime(_selectedFilePath);
+            if (currentWriteTime > _lastFileWriteTime)
+            {
+                _lastFileWriteTime = currentWriteTime;
+                // If viewing decrypted, refresh that too
+                if (_viewDecrypted)
+                {
+                    RefreshDecryptedContent();
+                }
+                else
+                {
+                    _fileContentBuffer = File.ReadAllText(_selectedFilePath);
+                }
+                Repaint();
+            }
         }
 
         private void OnGUI()
@@ -160,7 +209,16 @@ namespace OSK
             // ==================================
 
             DrawSeparator(Color.gray);
+            
+            EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField("Files List", EditorStyles.boldLabel);
+            GUI.color = new Color(1f, 0.7f, 0.7f);
+            if (GUILayout.Button("Delete All", EditorStyles.miniButton, GUILayout.Width(70)))
+            {
+                DeleteAllFiles();
+            }
+            GUI.color = Color.white;
+            EditorGUILayout.EndHorizontal();
 
             // Danh sách file
             _scrollPosLeft = EditorGUILayout.BeginScrollView(_scrollPosLeft);
@@ -219,6 +277,7 @@ namespace OSK
                 EditorGUILayout.LabelField(Path.GetFileName(_selectedFilePath), EditorStyles.boldLabel);
 
                 // JSON Tools
+                // JSON Tools
                 if (_selectedFilePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                 {
                     GUI.backgroundColor = new Color(0.7f, 0.9f, 1f);
@@ -227,6 +286,17 @@ namespace OSK
                     GUI.backgroundColor = Color.white;
                     GUILayout.Space(10);
                 }
+
+                // Decrypt Tool
+                Color btnColor = _viewDecrypted ? Color.cyan : Color.white;
+                GUI.backgroundColor = btnColor;
+                if (GUILayout.Button(_viewDecrypted ? "View Encrypted" : "Decrypt View", EditorStyles.miniButton, GUILayout.Width(100)))
+                {
+                    _viewDecrypted = !_viewDecrypted;
+                    if (_viewDecrypted) RefreshDecryptedContent();
+                }
+                GUI.backgroundColor = Color.white;
+                GUILayout.Space(5);
 
                 if (GUILayout.Button("Delete", GUILayout.Width(60))) DeleteSelectedFile();
                 EditorGUILayout.EndHorizontal();
@@ -237,8 +307,13 @@ namespace OSK
                 _scrollPosRight = EditorGUILayout.BeginScrollView(_scrollPosRight); 
 
                 EditorGUI.BeginChangeCheck();
-                string newContent = EditorGUILayout.TextArea(_fileContentBuffer, GUILayout.ExpandHeight(true));
-                if (EditorGUI.EndChangeCheck())
+                string displayContent = _viewDecrypted ? _decryptedContentBuffer : _fileContentBuffer;
+                
+                GUI.enabled = !_viewDecrypted; // Disable editing if viewing decrypted
+                string newContent = EditorGUILayout.TextArea(displayContent, GUILayout.ExpandHeight(true));
+                GUI.enabled = true;
+
+                if (!_viewDecrypted && EditorGUI.EndChangeCheck())
                 {
                     _fileContentBuffer = newContent;
                     _isEditing = true;
@@ -292,7 +367,9 @@ namespace OSK
             {
                 _selectedFilePath = path;
                 _fileContentBuffer = File.ReadAllText(path);
+                _lastFileWriteTime = File.GetLastWriteTime(path);
                 _isEditing = false;
+                _viewDecrypted = false;
                 GUI.FocusControl(null);
             }
         }
@@ -302,8 +379,10 @@ namespace OSK
             try
             {
                 File.WriteAllText(_selectedFilePath, _fileContentBuffer);
+                _lastFileWriteTime = File.GetLastWriteTime(_selectedFilePath);
                 _isEditing = false;
                 ShowNotification(new GUIContent("Saved!"));
+                AssetDatabase.Refresh();
             }
             catch (Exception ex)
             {
@@ -318,6 +397,49 @@ namespace OSK
                 File.Delete(_selectedFilePath);
                 _selectedFilePath = null;
                 _fileContentBuffer = "";
+                _viewDecrypted = false;
+            }
+        }
+
+        private void DeleteAllFiles()
+        {
+            string[] files = GetFilteredFiles();
+            if (files.Length == 0) return;
+
+            if (EditorUtility.DisplayDialog("Delete All", $"Delete ALL {files.Length} files in this directory?\nThis cannot be undone.", "Delete All", "Cancel"))
+            {
+                foreach (string f in files)
+                {
+                    try { File.Delete(f); } catch { }
+                }
+                _selectedFilePath = null;
+                _fileContentBuffer = "";
+                _viewDecrypted = false;
+                AssetDatabase.Refresh();
+            }
+        }
+
+        private void RefreshDecryptedContent()
+        {
+            if (string.IsNullOrEmpty(_selectedFilePath) || !File.Exists(_selectedFilePath)) return;
+
+            try
+            {
+                byte[] rawBytes = File.ReadAllBytes(_selectedFilePath);
+                byte[] finalBytes = rawBytes.DecryptSmart(IOUtility.encryptKey);
+
+                if (finalBytes != null)
+                {
+                    _decryptedContentBuffer = Encoding.UTF8.GetString(finalBytes);
+                }
+                else
+                {
+                    _decryptedContentBuffer = "❌ [Decryption Failed]";
+                }
+            }
+            catch (Exception ex)
+            {
+                _decryptedContentBuffer = $"❌ [Error]: {ex.Message}";
             }
         }
 
@@ -325,13 +447,18 @@ namespace OSK
         {
             try
             {
-                _fileContentBuffer = JsonHelper.FormatJson(_fileContentBuffer, pretty);
-                _isEditing = true;
+                if (_viewDecrypted)
+                {
+                    _decryptedContentBuffer = JsonHelper.FormatJson(_decryptedContentBuffer, pretty);
+                }
+                else
+                {
+                    _fileContentBuffer = JsonHelper.FormatJson(_fileContentBuffer, pretty);
+                    _isEditing = true;
+                }
                 GUI.FocusControl(null);
             }
-            catch
-            {
-            }
+            catch { }
         }
 
         private void DrawPlayerPrefsSection()

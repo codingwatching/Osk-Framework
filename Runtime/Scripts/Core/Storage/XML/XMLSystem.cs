@@ -80,11 +80,8 @@ namespace OSK
 
             try
             {
-                byte[] bytes = File.ReadAllBytes(path);
-                if (isEncrypted)
-                {
-                    bytes = FileSecurity.Decrypt(bytes, IOUtility.encryptKey);
-                }
+                byte[] bytes = File.ReadAllBytes(path).DecryptSmart(IOUtility.encryptKey);
+                if (bytes == null) return defaultValue;
                 
                 var serializer = new XmlSerializer(typeof(T));
                 using (var memoryStream = new MemoryStream(bytes))

@@ -100,21 +100,14 @@ namespace OSK
             try
             {
                 byte[] bytes = File.ReadAllBytes(path);
-                if (decrypt)
-                    bytes = FileSecurity.Decrypt(bytes, IOUtility.encryptKey);
-
-                using var reader = new BinaryReader(new MemoryStream(bytes));
-                int len = reader.ReadInt32();
-                byte[] jsonBytes = reader.ReadBytes(len);
-
-                jsonBytes = DataCompressor.Decompress(jsonBytes);
+                byte[] data = bytes.DecryptSmart(IOUtility.encryptKey);
+                if (data == null) return defaultValue;
 
                 MyLogger.Log($"✅ Loaded: {path}");
                 var settings = new JsonSerializerSettings { Converters = { new Vector3Converter(), new QuaternionConverter() } };
                 
-                // 🚀 ULTRA OPTIMIZATION: Stream bytes straight to deserializer
-                using (var ms = new MemoryStream(jsonBytes))
-                using (var sr = new StreamReader(ms, Encoding.UTF8))
+                using (var dataStream = new MemoryStream(data))
+                using (var sr = new StreamReader(dataStream, Encoding.UTF8))
                 using (var jr = new JsonTextReader(sr))
                 {
                     var serializer = JsonSerializer.CreateDefault(settings);

@@ -46,7 +46,7 @@ namespace OSK
                         json = FormatJsonDecimals(json, DecimalPlaces);
                     var bytes = Encoding.UTF8.GetBytes(json);
                     bytes = DataCompressor.Compress(bytes);
-                    File.WriteAllBytes(tempPath, Obfuscator.Encrypt(bytes, IOUtility.encryptKey));
+                    File.WriteAllBytes(tempPath, FileSecurity.Encrypt(bytes, IOUtility.encryptKey));
                 }
                 else
                 {
@@ -100,8 +100,7 @@ namespace OSK
 
                 if (decrypt)
                 {
-                    byte[] bytes = Obfuscator.Decrypt(File.ReadAllBytes(path), IOUtility.encryptKey);
-                    bytes = DataCompressor.Decompress(bytes);
+                    byte[] bytes = File.ReadAllBytes(path).DecryptSmart(IOUtility.encryptKey);
                     string json = Encoding.UTF8.GetString(bytes);
                     if (string.IsNullOrWhiteSpace(json)) throw new IOException("File empty or corrupt");
                     data = JsonConvert.DeserializeObject<T>(json, settings);

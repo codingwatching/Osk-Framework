@@ -79,18 +79,18 @@ namespace OSK
             await Cysharp.Threading.Tasks.UniTask.RunOnThreadPool(() => SaveResolved(path, data, encrypt));
         }
 
-        public T Load<T>(string fileName, bool decrypt = false)
+        public T Load<T>(string fileName, T defaultValue = default, bool decrypt = false)
         {
             string path = ResolvePath(fileName);
-            return LoadResolved<T>(path, decrypt);
+            return LoadResolved<T>(path,defaultValue, decrypt);
         }
 
-        private T LoadResolved<T>(string path, bool decrypt = false)
+        private T LoadResolved<T>(string path, T defaultValue = default, bool decrypt = false)
         {
             if (!File.Exists(path))
             {
                 MyLogger.LogError($"❌ File not found: {path}");
-                return default;
+                return defaultValue;
             }
 
             try
@@ -125,15 +125,15 @@ namespace OSK
             catch (System.Exception ex)
             {
                 MyLogger.LogError($"❌ Load Error: {Path.GetFileName(path)} → {ex.Message}");
-                return default;
+                return defaultValue;
             }
         }
 
-        public async Cysharp.Threading.Tasks.UniTask<T> LoadAsync<T>(string fileName, bool decrypt = false)
+        public async Cysharp.Threading.Tasks.UniTask<T> LoadAsync<T>(string fileName, T defaultValue = default, bool isDecrypt = false)
         {
             MyLogger.Log($"⏳ [Async] Starting background load for: {fileName}");
             string path = ResolvePath(fileName); // MUST be on Main Thread
-            return await Cysharp.Threading.Tasks.UniTask.RunOnThreadPool(() => LoadResolved<T>(path, decrypt));
+            return await Cysharp.Threading.Tasks.UniTask.RunOnThreadPool(() => LoadResolved<T>(path, defaultValue, isDecrypt));
         }
 
         public void Delete(string fileName) => IOUtility.DeleteFile(EnsureExtension(fileName, ".json"));

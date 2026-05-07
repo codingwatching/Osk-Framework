@@ -20,6 +20,16 @@ namespace OSK
     
     public class KEY_SAVE
     {
+        public const string KEY_MUSIC_VOLUME = "MusicVolume";
+        public const string KEY_SFX_VOLUME = "SFXVolume";
+        public const string KEY_AMBIENCE_VOLUME = "AmbienceVolume";
+        public const string KEY_VOICE_VOLUME = "VoiceVolume";
+        
+        public const string KEY_MUSIC_ENABLED = "MusicEnabled";
+        public const string KEY_SFX_ENABLED = "SFXEnabled";
+        public const string KEY_AMBIENCE_ENABLED = "AmbientEnabled";
+        public const string KEY_VOICE_ENABLED = "VoiceEnabled";
+        
     }
      
 }

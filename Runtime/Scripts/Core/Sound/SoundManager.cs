@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using DG.Tweening;
 using Sirenix.OdinInspector;
 using UnityEngine;
-using UnityEngine.Audio; 
+using UnityEngine.Audio;
 
 namespace OSK
 {
@@ -13,22 +13,25 @@ namespace OSK
         [ReadOnly, SerializeField] private List<PlayingSound> _listSoundPlayings = new List<PlayingSound>();
         [ReadOnly, SerializeField] private List<SoundData> _pendingMusic = new List<SoundData>();
         private readonly Dictionary<string, Tween> _playingTweens = new Dictionary<string, Tween>();
-        
+
         private Dictionary<string, SoundData> _soundDataById;
         private Dictionary<AudioClip, SoundData> _soundDataByClip;
         private readonly Stack<PlayingSound> _playingSoundPool = new Stack<PlayingSound>(16);
-        
+
         public List<SoundData> ListSoundData => _listSoundData;
         public List<PlayingSound> ListSoundPlayings => _listSoundPlayings;
         public List<SoundData> PendingMusic => _pendingMusic;
         public Dictionary<string, Tween> PlayingTweens => _playingTweens;
 
         [InfoBox("⚠️ Use maxCapacityMusic / maxCapacitySoundEffects to limit the number of sounds playing.")]
-        [SerializeField] private int maxCapacityMusic = 5;
+        [SerializeField]
+        private int maxCapacityMusic = 5;
+
         [SerializeField] private int maxCapacitySoundEffects = 10;
 
         [InfoBox("⚠️ Use IsEnable* OR Volume fields to control each sound type.")]
         public bool IsEnableMusic = true;
+
         public bool IsEnableSoundSFX = true;
         public bool IsEnableAmbience = true;
         public bool IsEnableVoice = true;
@@ -43,6 +46,7 @@ namespace OSK
         private bool _pauseWhenInBackground;
 
         //─────────────────────────────────────────────────────────────
+
         #region Init
 
         public override void OnInit()
@@ -68,13 +72,43 @@ namespace OSK
 
             maxCapacityMusic = soundList.maxCapacityMusic;
             maxCapacitySoundEffects = soundList.maxCapacitySFX;
+
+            LoadSettings();
+        }
+
+        public void SaveSettings()
+        {
+            Main.Data.Save<float>(SaveType.PlayerPrefs, KEY_SAVE.KEY_MUSIC_VOLUME, MusicVolume);
+            Main.Data.Save<float>(SaveType.PlayerPrefs, KEY_SAVE.KEY_SFX_VOLUME, SFXVolume);
+            Main.Data.Save<float>(SaveType.PlayerPrefs, KEY_SAVE.KEY_AMBIENCE_VOLUME, AmbienceVolume);
+            Main.Data.Save<float>(SaveType.PlayerPrefs, KEY_SAVE.KEY_VOICE_VOLUME, VoiceVolume);
+
+            Main.Data.Save<int>(SaveType.PlayerPrefs, KEY_SAVE.KEY_MUSIC_ENABLED, IsEnableMusic ? 1 : 0);
+            Main.Data.Save<int>(SaveType.PlayerPrefs, KEY_SAVE.KEY_SFX_ENABLED, IsEnableSoundSFX ? 1 : 0);
+            Main.Data.Save<int>(SaveType.PlayerPrefs, KEY_SAVE.KEY_AMBIENCE_ENABLED, IsEnableAmbience ? 1 : 0);
+            Main.Data.Save<int>(SaveType.PlayerPrefs, KEY_SAVE.KEY_VOICE_ENABLED, IsEnableVoice ? 1 : 0);
+        }
+
+        public void LoadSettings()
+        {
+            MusicVolume =    Main.Data.Load<float>(SaveType.PlayerPrefs, KEY_SAVE.KEY_MUSIC_VOLUME, 1f);
+            SFXVolume =      Main.Data.Load<float>(SaveType.PlayerPrefs, KEY_SAVE.KEY_SFX_VOLUME, 1f);
+            AmbienceVolume = Main.Data.Load<float>(SaveType.PlayerPrefs, KEY_SAVE.KEY_AMBIENCE_VOLUME, 1f);
+            VoiceVolume =    Main.Data.Load<float>(SaveType.PlayerPrefs, KEY_SAVE.KEY_VOICE_VOLUME, 1f);
+
+            IsEnableMusic =    Main.Data.Load<int>(SaveType.PlayerPrefs, KEY_SAVE.KEY_MUSIC_ENABLED, 1) == 1;
+            IsEnableSoundSFX = Main.Data.Load<int>(SaveType.PlayerPrefs, KEY_SAVE.KEY_SFX_ENABLED, 1) == 1;
+            IsEnableAmbience = Main.Data.Load<int>(SaveType.PlayerPrefs, KEY_SAVE.KEY_AMBIENCE_ENABLED, 1) == 1;
+            IsEnableVoice =    Main.Data.Load<int>(SaveType.PlayerPrefs, KEY_SAVE.KEY_VOICE_ENABLED, 1) == 1;
+
+            SyncAllVolumes();
         }
 
         public void RebuildLookupCaches()
         {
             _soundDataById = new Dictionary<string, SoundData>(_listSoundData.Count);
             _soundDataByClip = new Dictionary<AudioClip, SoundData>(_listSoundData.Count);
-            
+
             for (int i = 0; i < _listSoundData.Count; i++)
             {
                 var data = _listSoundData[i];
@@ -110,7 +144,9 @@ namespace OSK
         }
 
         #endregion
+
         //─────────────────────────────────────────────────────────────
+
         #region Helpers
 
         /// <summary>
@@ -120,11 +156,11 @@ namespace OSK
         {
             switch (type)
             {
-                case SoundType.MUSIC:    return MusicVolume;
-                case SoundType.SFX:      return SFXVolume;
+                case SoundType.MUSIC: return MusicVolume;
+                case SoundType.SFX: return SFXVolume;
                 case SoundType.AMBIENCE: return AmbienceVolume;
-                case SoundType.VOICE:    return VoiceVolume;
-                default:                 return 1f;
+                case SoundType.VOICE: return VoiceVolume;
+                default: return 1f;
             }
         }
 
@@ -135,11 +171,11 @@ namespace OSK
         {
             switch (type)
             {
-                case SoundType.MUSIC:    return IsEnableMusic;
-                case SoundType.SFX:      return IsEnableSoundSFX;
+                case SoundType.MUSIC: return IsEnableMusic;
+                case SoundType.SFX: return IsEnableSoundSFX;
                 case SoundType.AMBIENCE: return IsEnableAmbience;
-                case SoundType.VOICE:    return IsEnableVoice;
-                default:                 return true;
+                case SoundType.VOICE: return IsEnableVoice;
+                default: return true;
             }
         }
 
@@ -150,10 +186,10 @@ namespace OSK
         {
             switch (type)
             {
-                case SoundType.MUSIC:    IsEnableMusic = enabled; break;
-                case SoundType.SFX:      IsEnableSoundSFX = enabled; break;
+                case SoundType.MUSIC: IsEnableMusic = enabled; break;
+                case SoundType.SFX: IsEnableSoundSFX = enabled; break;
                 case SoundType.AMBIENCE: IsEnableAmbience = enabled; break;
-                case SoundType.VOICE:    IsEnableVoice = enabled; break;
+                case SoundType.VOICE: IsEnableVoice = enabled; break;
             }
         }
 
@@ -164,11 +200,12 @@ namespace OSK
         {
             switch (type)
             {
-                case SoundType.MUSIC:    MusicVolume = volume; break;
-                case SoundType.SFX:      SFXVolume = volume; break;
+                case SoundType.MUSIC: MusicVolume = volume; break;
+                case SoundType.SFX: SFXVolume = volume; break;
                 case SoundType.AMBIENCE: AmbienceVolume = volume; break;
-                case SoundType.VOICE:    VoiceVolume = volume; break;
+                case SoundType.VOICE: VoiceVolume = volume; break;
             }
+
             SyncAllVolumes();
         }
 
@@ -178,7 +215,7 @@ namespace OSK
             {
                 var p = _listSoundPlayings[i];
                 if (p == null || p.AudioSource == null) continue;
-                
+
                 float mult = GetVolumeMultiplier(p.SoundData.type);
                 if (p.VolumeTween == null || !p.VolumeTween.IsActive())
                 {
@@ -188,6 +225,7 @@ namespace OSK
         }
 
         #endregion
+
         #region Play Entry
 
         public AudioSource Play(string id, VolumeFade volume = null, float startTime = 0, bool? loop = null,
@@ -206,7 +244,8 @@ namespace OSK
             int actualMinDist = minDistance >= 0 ? minDistance : data.minDistance;
             int actualMaxDist = maxDistance >= 0 ? maxDistance : data.maxDistance;
 
-            return InternalPlay(data.GetNextClip(), data.type, volume, startTime, actualLoop, delay, actualPriority, pitch, target,
+            return InternalPlay(data.GetNextClip(), data.type, volume, startTime, actualLoop, delay, actualPriority,
+                pitch, target,
                 actualMinDist, actualMaxDist);
         }
 
@@ -228,15 +267,17 @@ namespace OSK
                 return null;
             }
 
-            var data = GetSoundInfo(clip) ?? new SoundData { audioClip = clip, id = clip.name, type = type, volume = 1f };
+            var data = GetSoundInfo(clip) ?? new SoundData
+                { audioClip = clip, id = clip.name, type = type, volume = 1f };
             bool isMusic = type == SoundType.MUSIC || loop;
             if (!IsSoundTypeEnabled(type) && !(isMusic && IsEnableMusic))
             {
                 if (isMusic)
-                { 
+                {
                     if (!_pendingMusic.Contains(data))
                         _pendingMusic.Add(data);
                 }
+
                 return null;
             }
 
@@ -246,12 +287,13 @@ namespace OSK
                 if (_listSoundPlayings[i].SoundData != null && _listSoundPlayings[i].SoundData.type == type)
                     count++;
             }
-            
+
             int maxCap = (type == SoundType.MUSIC) ? maxCapacityMusic : maxCapacitySoundEffects;
             if (count >= maxCap)
                 RemoveOldestSound(type);
 
-            void PlayNow() => CreateAndPlayAudioSource(clip, data, startTime, volume, loop, priority, pitch, target, minDist, maxDist);
+            void PlayNow() => CreateAndPlayAudioSource(clip, data, startTime, volume, loop, priority, pitch, target,
+                minDist, maxDist);
 
             if (delay > 0)
             {
@@ -266,7 +308,9 @@ namespace OSK
         }
 
         #endregion
+
         //─────────────────────────────────────────────────────────────
+
         #region Core Logic
 
         private AudioSource CreateAndPlayAudioSource(AudioClip clip, SoundData data, float startTime, VolumeFade volume,
@@ -282,7 +326,7 @@ namespace OSK
             {
                 source.outputAudioMixerGroup = data.mixerGroup;
             }
-            
+
             pitch ??= new MinMaxFloat(1, 1);
             var playing = RentPlayingSound();
             playing.AudioSource = source;
@@ -338,13 +382,14 @@ namespace OSK
             for (int i = 0; i < _listSoundPlayings.Count; i++)
             {
                 var p = _listSoundPlayings[i];
-                if (p.SoundData == null || p.SoundData.type != type)  continue;
-                
+                if (p.SoundData == null || p.SoundData.type != type) continue;
+
                 if (p.AudioSource != null)
                 {
                     p.AudioSource.Stop();
                     Main.Pool.Despawn(p.AudioSource);
                 }
+
                 p.KillTween();
                 _listSoundPlayings.RemoveAt(i);
                 ReturnPlayingSound(p);
@@ -360,9 +405,11 @@ namespace OSK
         }
 
         #endregion
+
         //─────────────────────────────────────────────────────────────
-        
+
         #region Lookup & Pool
+
         public SoundData GetSoundInfo(string id)
         {
             if (string.IsNullOrEmpty(id)) return null;
@@ -372,6 +419,7 @@ namespace OSK
             {
                 if (_listSoundData[i].id == id) return _listSoundData[i];
             }
+
             return null;
         }
 
@@ -384,6 +432,7 @@ namespace OSK
             {
                 if (_listSoundData[i].audioClip == clip) return _listSoundData[i];
             }
+
             return null;
         }
 
@@ -395,8 +444,8 @@ namespace OSK
                 if (!_parentGroup.TryGetComponent(out DontDestroy existing))
                     _parentGroup.gameObject.AddComponent<DontDestroy>().DontDesGOOnLoad();
             }
-        } 
-        
+        }
+
         public void SetMixerVolume(AudioMixer mainMixer, string parameterName, float value)
         {
             if (mainMixer == null)
@@ -404,12 +453,13 @@ namespace OSK
                 MyLogger.LogWarning("Main Mixer is not assigned in SoundManager.");
                 return;
             }
+
             // Chuyển đổi từ 0.0001-1 sang -80dB đến 0dB
             // Công thức: dB = 20 * log10(Linear) 
             float dB = value > 0 ? Mathf.Log10(value) * 20 : -80f;
             mainMixer.SetFloat(parameterName, dB);
         }
-        
+
         public void SetMixerGroupVolume(AudioMixerGroup mixerGroup, float value)
         {
             if (mixerGroup == null || mixerGroup.audioMixer == null)
@@ -417,6 +467,7 @@ namespace OSK
                 MyLogger.LogWarning("Mixer Group or its AudioMixer is null.");
                 return;
             }
+
             float dB = value > 0 ? Mathf.Log10(value) * 20 : -80f;
             mixerGroup.audioMixer.SetFloat(mixerGroup.name + "_Volume", dB);
         }
@@ -430,6 +481,7 @@ namespace OSK
                 ps.RawVolume = 1f;
                 return ps;
             }
+
             return new PlayingSound();
         }
 
@@ -439,7 +491,7 @@ namespace OSK
             ps.Reset();
             _playingSoundPool.Push(ps);
         }
-        
+
         #endregion
     }
 }

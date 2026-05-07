@@ -89,11 +89,8 @@ namespace OSK
         public void SyncModules()
         {
 #if UNITY_EDITOR
-            // 1. Dọn dẹp các Module cũ
             var children = new List<GameObject>();
             foreach (Transform child in transform) children.Add(child.gameObject);
-
-            // Chỉ xóa những đối tượng có format tên "số.TênModule" để tránh xóa nhầm các object khác của người dùng
             foreach (var child in children)
             {
                 if (System.Text.RegularExpressions.Regex.IsMatch(child.name, @"^\d+\..+"))
@@ -101,8 +98,6 @@ namespace OSK
                     UnityEditor.Undo.DestroyObjectImmediate(child);
                 }
             }
-
-            // 2. Khởi tạo lại dựa trên modules được chọn
             var moduleValues = (ModuleType[])Enum.GetValues(typeof(ModuleType));
             Array.Sort(moduleValues, (a, b) => ((int)a).CompareTo((int)b));
 
@@ -132,7 +127,6 @@ namespace OSK
 
         private void InitModules()
         {
-            // 1. Get all module types and sort them by their bit value (priority)
             var moduleValues = (ModuleType[])Enum.GetValues(typeof(ModuleType));
             Array.Sort(moduleValues, (a, b) => ((int)a).CompareTo((int)b));
             int index = 0;
@@ -184,8 +178,7 @@ namespace OSK
         }
 
         /// <summary>
-        /// Tự động tiêm (Inject) các module vào một đối tượng bất kỳ.
-        /// Sử dụng: Main.Inject(this);
+        /// Main.Inject(this);
         /// </summary>
         public static void Inject(object target)
         {

@@ -64,18 +64,18 @@ namespace OSK
             await Cysharp.Threading.Tasks.UniTask.RunOnThreadPool(() => SaveResolved(path, data, encrypt));
         }
 
-        public T Load<T>(string fileName, bool isEncrypted = false)
+        public T Load<T>(string fileName, T defaultValue = default, bool isDecrypt = false)
         {
             string path = ResolvePath(fileName);
-            return LoadResolved<T>(path, isEncrypted);
+            return LoadResolved<T>(path, defaultValue, isDecrypt);
         }
 
-        private T LoadResolved<T>(string path, bool isEncrypted = false)
+        private T LoadResolved<T>(string path, T defaultValue = default, bool isEncrypted = false)
         {
             if (!File.Exists(path))
             {
                 MyLogger.LogWarning($"File not found: {path}");
-                return default(T);
+                return defaultValue;
             }
 
             try
@@ -96,15 +96,15 @@ namespace OSK
             catch (Exception ex)
             {
                 MyLogger.LogError($"❌ Load XML Error: {path}\n{ex.Message}");
-                return default(T);
+                return defaultValue;
             }
         }
 
-        public async Cysharp.Threading.Tasks.UniTask<T> LoadAsync<T>(string fileName, bool isEncrypted = false)
+        public async Cysharp.Threading.Tasks.UniTask<T> LoadAsync<T>(string fileName, T defaultValue = default, bool isDecrypt = false)
         {
             MyLogger.Log($"⏳ [Async] Starting background load for: {fileName}");
             string path = ResolvePath(fileName); // MUST be on Main Thread
-            return await Cysharp.Threading.Tasks.UniTask.RunOnThreadPool(() => LoadResolved<T>(path, isEncrypted));
+            return await Cysharp.Threading.Tasks.UniTask.RunOnThreadPool(() => LoadResolved<T>(path, defaultValue, isDecrypt));
         }
 
         public void Delete(string fileName) => IOUtility.DeleteFile(EnsureExtension(fileName, ".xml"));

@@ -283,6 +283,23 @@ namespace OSK
         #endregion
 
         //─────────────────────────────────────────────────────────────
+        #region Volume Control
+        
+        /// <summary>
+        /// Smoothly fade the volume multiplier of a SoundType to a target value.
+        /// </summary>
+        public Tween FadeVolumeForType(SoundType type, float targetVolume, float duration)
+        {
+            float startVolume = GetVolumeMultiplier(type);
+            return DOVirtual.Float(startVolume, targetVolume, duration, v => 
+            {
+                SetVolumeForType(type, v);
+            });
+        }
+        
+        #endregion
+
+        //─────────────────────────────────────────────────────────────
         #region Pending Audio
 
         public void StopPendingAudio(string clipId)

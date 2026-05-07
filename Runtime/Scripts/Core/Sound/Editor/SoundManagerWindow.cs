@@ -735,9 +735,8 @@ namespace OSK
 
             // ID / Name
             EditorGUILayout.BeginHorizontal();
-            GUILayout.Space(ind); GUILayout.Label("ID (Auto)", GUILayout.Width(lw));
-            string previewId = newSoundDraft.audioClip != null ? newSoundDraft.audioClip.name : "—";
-            EditorGUILayout.LabelField(previewId, EditorStyles.textField, GUILayout.Width(fw));
+            GUILayout.Space(ind); GUILayout.Label("ID (Call Name)", GUILayout.Width(lw));
+            newSoundDraft.id = EditorGUILayout.TextField(newSoundDraft.id, GUILayout.Width(fw));
             EditorGUILayout.EndHorizontal();
 
             // Playback Mode
@@ -863,10 +862,16 @@ namespace OSK
             GUI.backgroundColor = Color.green;
             if (GUILayout.Button("Confirm Add", GUILayout.Height(24), GUILayout.Width(120)))
             {
-                if (newSoundDraft.audioClip != null && listSoundSo != null)
+                if (listSoundSo != null)
                 {
+                    if (string.IsNullOrEmpty(newSoundDraft.id))
+                    {
+                        if (newSoundDraft.audioClip != null) newSoundDraft.id = newSoundDraft.audioClip.name;
+                        else if (newSoundDraft.clips.Count > 0 && newSoundDraft.clips[0] != null) newSoundDraft.id = newSoundDraft.clips[0].name;
+                        else newSoundDraft.id = "NewSound_" + UnityEngine.Random.Range(100, 999);
+                    }
+
                     Undo.RecordObject(listSoundSo, "Add SoundData");
-                    newSoundDraft.id = newSoundDraft.audioClip.name;
                     listSoundSo.ListSoundInfos.Add(newSoundDraft);
                     newSoundDraft = null;
                     EditorUtility.SetDirty(listSoundSo);
@@ -910,17 +915,20 @@ namespace OSK
                 // Xác định group sẽ gán cho các clip mới (ưu tiên group đang chọn ở sidebar)
                 string targetGroup = !string.IsNullOrEmpty(selectedGroup) ? selectedGroup : "Default";
 
+                // Determine default mixer group
+                AudioMixerGroup defaultSfxMixer = listSoundSo.availableMixerGroups.FirstOrDefault(g => g != null && g.name.Contains("SFX"));
+
                 foreach (var clip in clips)
                 {
-                    // Kiểm tra trùng lặp để không add lại clip đã có
                     if (!listSoundSo.ListSoundInfos.Any(s => s.audioClip == clip))
                     {
                         listSoundSo.ListSoundInfos.Add(new SoundData
                         {
                             audioClip = clip,
                             id = clip.name,
-                            group = targetGroup, // FIX: Gán vào group đang chọn thay vì Default
+                            group = targetGroup,
                             type = SoundType.SFX,
+                            mixerGroup = defaultSfxMixer, // Auto assign
                             volume = 1f,
                             pitch = new MinMaxFloat(1f, 1f)
                         });

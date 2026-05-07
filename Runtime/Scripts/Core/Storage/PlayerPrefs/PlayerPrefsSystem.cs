@@ -28,16 +28,16 @@ namespace OSK
             return Cysharp.Threading.Tasks.UniTask.CompletedTask;
         }
 
-        public T Load<T>(string fileName, bool isDecrypt = false)
+        public T Load<T>(string fileName, T defaultValue = default, bool isDecrypt = false)
         {
             //MyLogger.Log($"✅ Loaded (PlayerPrefs): {fileName}");
-            return PrefData.Load<T>(fileName, default);
+            return PrefData.Load<T>(fileName, defaultValue);
         }
 
-        public Cysharp.Threading.Tasks.UniTask<T> LoadAsync<T>(string fileName, bool isDecrypt = false)
+        public Cysharp.Threading.Tasks.UniTask<T> LoadAsync<T>(string fileName, T defaultValue = default, bool isDecrypt = false)
         {
             //MyLogger.Log($"⏳ [Async] PlayerPrefs load is instantaneous, wrapping in UniTask: {fileName}");
-            return Cysharp.Threading.Tasks.UniTask.FromResult(Load<T>(fileName, isDecrypt));
+            return Cysharp.Threading.Tasks.UniTask.FromResult(Load<T>(fileName,defaultValue, isDecrypt));
         }
 
         public void Delete(string fileName)

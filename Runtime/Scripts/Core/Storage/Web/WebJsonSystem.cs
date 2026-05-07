@@ -26,10 +26,10 @@ namespace OSK
             return Cysharp.Threading.Tasks.UniTask.CompletedTask;
         }
 
-        public T Load<T>(string fileName, bool decrypt = false)
+        public T Load<T>(string fileName, T defaultValue = default, bool decrypt = false)
         {
             if (!PlayerPrefs.HasKey(fileName))
-                return default;
+                return defaultValue;
 
             string json = PlayerPrefs.GetString(fileName);
 
@@ -43,10 +43,10 @@ namespace OSK
             return JsonConvert.DeserializeObject<T>(json);
         }
 
-        public Cysharp.Threading.Tasks.UniTask<T> LoadAsync<T>(string fileName, bool decrypt = false)
+        public Cysharp.Threading.Tasks.UniTask<T> LoadAsync<T>(string fileName, T defaultValue = default, bool decrypt = false)
         {
             MyLogger.Log($"⏳ [Async] Web load is instantaneous, wrapping in UniTask: {fileName}");
-            return Cysharp.Threading.Tasks.UniTask.FromResult(Load<T>(fileName, decrypt));
+            return Cysharp.Threading.Tasks.UniTask.FromResult(Load<T>(fileName, defaultValue, decrypt));
         }
 
         public void Delete(string fileName)

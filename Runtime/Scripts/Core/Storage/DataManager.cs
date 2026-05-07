@@ -4,12 +4,17 @@ using System.Collections.Generic;
 
 namespace OSK
 {
-    public enum SaveType { Json, File, Xml, PlayerPrefs }
+    public enum SaveType
+    {
+        Json,
+        File,
+        Xml,
+        PlayerPrefs
+    }
 
     public class DataManager : GameFrameworkComponent
     {
-        [Header("Global Settings")]
-        public bool isEncrypt = false;
+        [Header("Global Settings")] public bool isEncrypt = false;
 
         private readonly JsonSystem _json = new JsonSystem();
         private readonly FileSystem _file = new FileSystem();
@@ -48,12 +53,13 @@ namespace OSK
         public void Save<T>(SaveType type, string fileName, T data)
         {
             var fs = Resolve(type);
-            
+
             if (fs == null)
             {
                 MyLogger.LogError($"DataManager.Save: Unknown SaveType {type}");
                 return;
             }
+
             try
             {
                 fs.Save(fileName, data, isEncrypt);
@@ -64,24 +70,24 @@ namespace OSK
             }
         }
 
-        public T Load<T>(SaveType type, string fileName)
+        public T Load<T>(SaveType type, string fileName, T defaultValue = default)
         {
             var fs = Resolve(type);
             if (fs == null)
             {
                 MyLogger.LogError($"DataManager.Load: Unknown SaveType {type}");
-                return default;
+                return defaultValue;
             }
 
             try
             {
-                if (!fs.Exists(fileName)) return default;
-                return fs.Load<T>(fileName, isEncrypt);
+                if (!fs.Exists(fileName)) return defaultValue;
+                return fs.Load<T>(fileName, defaultValue, isEncrypt);
             }
             catch (Exception ex)
             {
                 MyLogger.LogError($"DataManager.Load ERROR: {fileName} ({type})\n{ex}");
-                return default;
+                return defaultValue;
             }
         }
 
@@ -94,6 +100,7 @@ namespace OSK
                 MyLogger.LogError($"DataManager.SaveAsync: Unknown SaveType {type}");
                 return;
             }
+
             try
             {
                 await fs.SaveAsync(fileName, data, isEncrypt);
@@ -104,27 +111,28 @@ namespace OSK
             }
         }
 
-        public async Cysharp.Threading.Tasks.UniTask<T> LoadAsync<T>(SaveType type, string fileName)
+        public async Cysharp.Threading.Tasks.UniTask<T> LoadAsync<T>(SaveType type, string fileName,
+            T defaultValue = default)
         {
             var fs = Resolve(type);
             if (fs == null)
             {
                 MyLogger.LogError($"DataManager.LoadAsync: Unknown SaveType {type}");
-                return default;
+                return defaultValue;
             }
 
             try
             {
-                if (!fs.Exists(fileName)) return default;
-                return await fs.LoadAsync<T>(fileName, isEncrypt);
+                if (!fs.Exists(fileName)) return defaultValue;
+                return await fs.LoadAsync<T>(fileName, defaultValue, isEncrypt);
             }
             catch (Exception ex)
             {
                 MyLogger.LogError($"DataManager.LoadAsync ERROR: {fileName} ({type})\n{ex}");
-                return default;
+                return defaultValue;
             }
         }
-        
+
         public bool Exists(SaveType type, string fileName)
         {
             var fs = Resolve(type);
@@ -188,6 +196,7 @@ namespace OSK
                 MyLogger.LogError($"DataManager.WriteAllLines: Unknown SaveType {type}");
                 return;
             }
+
             try
             {
                 fs.WriteAllLines(fileName, lines);
@@ -197,7 +206,7 @@ namespace OSK
                 MyLogger.LogError($"DataManager.WriteAllLines ERROR: {fileName} ({type})\n{ex}");
             }
         }
- 
+
         // ---------- Internal helpers ----------
         private IFile Resolve(SaveType type) => _typeMap.GetValueOrDefault(type);
 

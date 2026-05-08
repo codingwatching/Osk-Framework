@@ -9,7 +9,7 @@ namespace OSK
     public partial class UIManager : GameFrameworkComponent
     {
         [ReadOnly, SerializeField] private RootUI _rootUI;
-        public Canvas Canvas => _rootUI.Canvas;
+        public Canvas Canvas => _rootUI.ScreenCanvas;
         public Camera UICamera => _rootUI.UICamera;
 
         public RootUI RootUI

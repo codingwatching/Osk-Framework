@@ -45,11 +45,20 @@ namespace OSK
 
         [Title("📌 References")]
         [Required, SerializeField] private Camera _uiCamera;
-        [Required, SerializeField] private Canvas _canvas;
-        [Required, SerializeField] private CanvasScaler _canvasScaler;
         [SerializeField] private Transform _viewContainer;
 
-        [Title("🏗️ Containers")]
+        [Title("🏗️ Containers (Multi-Canvas)")]
+        [SerializeField] private Canvas _screenCanvas;
+        [SerializeField] private Canvas _popupCanvas;
+        [SerializeField] private Canvas _overlayCanvas;
+        [SerializeField] private Canvas _lockCanvas;
+
+        [SerializeField] private CanvasScaler _screenScaler;
+        [SerializeField] private CanvasScaler _popupScaler;
+        [SerializeField] private CanvasScaler _overlayScaler;
+        [SerializeField] private CanvasScaler _lockScaler;
+
+        [Title("🏗️ Container Transforms")]
         [SerializeField] private Transform _screenContainer;
         [SerializeField] private Transform _popupContainer;
         [SerializeField] private Transform _overlayContainer;
@@ -68,8 +77,11 @@ namespace OSK
 
         #region Properties
 
-        public Canvas Canvas => _canvas;
-        public CanvasScaler CanvasScaler => _canvasScaler;
+        public Canvas ScreenCanvas => _screenCanvas;
+        public Canvas PopupCanvas => _popupCanvas;
+        public Canvas OverlayCanvas => _overlayCanvas;
+        public Canvas LockCanvas => _lockCanvas;
+        
         public Camera UICamera => _uiCamera;
         public Transform ViewContainer => _viewContainer;
         public Transform ScreenContainer => _screenContainer;
@@ -78,6 +90,28 @@ namespace OSK
         public Transform LockContainer => _lockContainer;
         public bool IsPortrait => isPortrait;
         public bool IsDirtySort { get; set; } = true;
+
+        public IEnumerable<Canvas> AllCanvases
+        {
+            get
+            {
+                yield return _screenCanvas;
+                yield return _popupCanvas;
+                yield return _overlayCanvas;
+                yield return _lockCanvas;
+            }
+        }
+
+        public IEnumerable<CanvasScaler> AllScalers
+        {
+            get
+            {
+                yield return _screenScaler;
+                yield return _popupScaler;
+                yield return _overlayScaler;
+                yield return _lockScaler;
+            }
+        }
         #endregion
 
         public void Initialize()
@@ -142,32 +176,41 @@ namespace OSK
 
         public void SetupCanvas()
         {
-            _canvas.referencePixelsPerUnit = 100;
-            _canvasScaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-
-            if (isPortrait)
-            {
-                _canvasScaler.referenceResolution = new Vector2(1080, 1920);
-                _canvasScaler.matchWidthOrHeight = 0;
-            }
-            else
-            {
-                _canvasScaler.referenceResolution = new Vector2(1920, 1080);
-                _canvasScaler.matchWidthOrHeight = 1;
-            }
+            SetupSingleCanvas(_screenCanvas, _screenScaler);
+            SetupSingleCanvas(_popupCanvas, _popupScaler);
+            SetupSingleCanvas(_overlayCanvas, _overlayScaler);
+            SetupSingleCanvas(_lockCanvas, _lockScaler);
 
 #if UNITY_EDITOR
             if (UnityEditor.PrefabUtility.IsPartOfPrefabInstance(this))
             {
-                UnityEditor.PrefabUtility.RecordPrefabInstancePropertyModifications(_canvas);
-                UnityEditor.PrefabUtility.RecordPrefabInstancePropertyModifications(_canvasScaler);
-
-                UnityEditor.EditorUtility.SetDirty(_canvas);
-                UnityEditor.EditorUtility.SetDirty(_canvasScaler);
                 UnityEditor.EditorUtility.SetDirty(gameObject);
-                MyLogger.Log($"[SetupCanvas] IsPortrait: {isPortrait} => Saved to prefab instance");
+                MyLogger.Log($"[SetupCanvas] Multi-Canvas Scaled for IsPortrait: {isPortrait}");
             }
 #endif
+        }
+
+        private void SetupSingleCanvas(Canvas canvas, CanvasScaler scaler)
+        {
+            if (canvas == null || scaler == null) return;
+
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.worldCamera = _uiCamera;
+            canvas.referencePixelsPerUnit = 100;
+            
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+
+            if (isPortrait)
+            {
+                scaler.referenceResolution = new Vector2(1080, 1920);
+                scaler.matchWidthOrHeight = 0;
+            }
+            else
+            {
+                scaler.referenceResolution = new Vector2(1920, 1080);
+                scaler.matchWidthOrHeight = 1;
+            }
         }
 
 
@@ -822,16 +865,43 @@ namespace OSK
         {
             if (_viewContainer == null) _viewContainer = transform;
 
-            _screenContainer = GetOrCreateContainer("ScreenContainer", _screenContainer);
-            _popupContainer = GetOrCreateContainer("PopupContainer", _popupContainer);
-            _overlayContainer = GetOrCreateContainer("OverlayContainer", _overlayContainer);
-            _lockContainer = GetOrCreateContainer("LockContainer", _lockContainer);
+            _screenContainer = EnsureCanvasContainer("ScreenCanvas", _screenCanvas, out _screenCanvas, out _screenScaler, 0);
+            _popupContainer = EnsureCanvasContainer("PopupCanvas", _popupCanvas, out _popupCanvas, out _popupScaler, 10);
+            _overlayContainer = EnsureCanvasContainer("OverlayCanvas", _overlayCanvas, out _overlayCanvas, out _overlayScaler, 20);
+            _lockContainer = EnsureCanvasContainer("LockCanvas", _lockCanvas, out _lockCanvas, out _lockScaler, 100);
 
-            // Ensure order: Screen -> Popup -> Overlay -> Lock
-            _screenContainer.SetAsFirstSibling();
-            _popupContainer.SetSiblingIndex(1);
-            _overlayContainer.SetSiblingIndex(2);
-            _lockContainer.SetAsLastSibling();
+            if (_lockContainer != null && _lockContainer.GetComponent<Image>() == null)
+            {
+                var img = _lockContainer.gameObject.AddComponent<Image>();
+                img.color = new Color(0, 0, 0, 0);
+                img.raycastTarget = true;
+                _lockContainer.gameObject.SetActive(false);
+            }
+        }
+
+        private Transform EnsureCanvasContainer(string name, Canvas existingCanvas, out Canvas canvas, out CanvasScaler scaler, int sortOrder)
+        {
+            Transform t;
+            if (existingCanvas != null)
+            {
+                canvas = existingCanvas;
+                scaler = existingCanvas.GetComponent<CanvasScaler>();
+                t = existingCanvas.transform;
+            }
+            else
+            {
+                var go = new GameObject(name, typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+                go.transform.SetParent(_viewContainer, false);
+                canvas = go.GetComponent<Canvas>();
+                scaler = go.GetComponent<CanvasScaler>();
+                t = go.transform;
+            }
+
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.worldCamera = _uiCamera;
+            canvas.sortingOrder = sortOrder;
+            
+            return t;
         }
 
         private Transform GetOrCreateContainer(string name, Transform current)

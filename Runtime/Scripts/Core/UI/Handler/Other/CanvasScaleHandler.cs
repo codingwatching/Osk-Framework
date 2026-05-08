@@ -9,34 +9,45 @@ namespace OSK
             RenderMode renderMode = RenderMode.ScreenSpaceOverlay, bool pixelPerfect = false,
             UnityEngine.Camera camera = null)
         {
-            RootUI.Canvas.renderMode = renderMode;
-            RootUI.Canvas.sortingOrder = sortOrder;
-            RootUI.Canvas.sortingLayerName = sortingLayerName;
-            RootUI.Canvas.pixelPerfect = pixelPerfect;
-            RootUI.Canvas.worldCamera = camera;
+            foreach (var canvas in RootUI.AllCanvases)
+            {
+                if (canvas == null) continue;
+                canvas.renderMode = renderMode;
+                canvas.sortingLayerName = sortingLayerName;
+                canvas.pixelPerfect = pixelPerfect;
+                canvas.worldCamera = camera;
+                
+                // Note: We don't override sortingOrder for all canvases here 
+                // because Screen, Popup, Overlay need their specific gaps (0, 10, 20).
+                // But if you explicitly want to shift all of them, we could add an offset.
+            }
+            
+            // Apply base sorting order to Screen Canvas as the reference
+            if (RootUI.ScreenCanvas != null)
+                RootUI.ScreenCanvas.sortingOrder = sortOrder;
         }
 
         public void SetupCanvasScaleForRatio()
         { 
-            if (RootUI?.CanvasScaler == null)
-            {
-                MyLogger.LogWarning("CanvasScaler  is not set up in the RootUI. Please ensure it is assigned.");
-                return;
-            }
-
             float ratio = (float)Screen.width / Screen.height;
+            float match = 0f;
+
             if (IsIpad())
             {
-                // For iPad, use MatchWidthOrHeight = 0 to maintain aspect ratio
-                RootUI.CanvasScaler.matchWidthOrHeight = 0f;
+                match = 0f;
             }
             else
             {
-                // For other devices, use MatchWidthOrHeight = 1 if the aspect ratio is wider than 0.65f
-                RootUI.CanvasScaler.matchWidthOrHeight = ratio > 0.65f ? 1 : 0;
+                match = ratio > 0.65f ? 1 : 0;
+            }
+
+            foreach (var scaler in RootUI.AllScalers)
+            {
+                if (scaler != null)
+                    scaler.matchWidthOrHeight = match;
             }
             
-            string log = Mathf.Approximately(RootUI.CanvasScaler.matchWidthOrHeight, 1f) ? "1 (Match Width)" : "0 (Match Height)";
+            string log = Mathf.Approximately(match, 1f) ? "1 (Match Width)" : "0 (Match Height)";
             MyLogger.Log($"Ratio: {ratio}. IsPad {IsIpad()} matchWidthOrHeight: {log}");
         }
          
@@ -63,9 +74,13 @@ namespace OSK
             float scaleFactor = 1f,
             float referencePixelsPerUnit = 100f)
         {
-            RootUI.CanvasScaler.uiScaleMode = scaleMode;
-            RootUI.CanvasScaler.scaleFactor = scaleFactor;
-            RootUI.CanvasScaler.referencePixelsPerUnit = referencePixelsPerUnit;
+            foreach (var scaler in RootUI.AllScalers)
+            {
+                if (scaler == null) continue;
+                scaler.uiScaleMode = scaleMode;
+                scaler.scaleFactor = scaleFactor;
+                scaler.referencePixelsPerUnit = referencePixelsPerUnit;
+            }
         }
 
         public void SetCanvasScaler(
@@ -75,11 +90,15 @@ namespace OSK
             float matchWidthOrHeight = 0f,
             float referencePixelsPerUnit = 100f)
         {
-            RootUI.CanvasScaler.uiScaleMode = scaleMode;
-            RootUI.CanvasScaler.referenceResolution = referenceResolution ?? new Vector2(1920, 1080);
-            RootUI.CanvasScaler.screenMatchMode = screenMatchMode;
-            RootUI.CanvasScaler.matchWidthOrHeight = matchWidthOrHeight;
-            RootUI.CanvasScaler.referencePixelsPerUnit = referencePixelsPerUnit;
+            foreach (var scaler in RootUI.AllScalers)
+            {
+                if (scaler == null) continue;
+                scaler.uiScaleMode = scaleMode;
+                scaler.referenceResolution = referenceResolution ?? new Vector2(1920, 1080);
+                scaler.screenMatchMode = screenMatchMode;
+                scaler.matchWidthOrHeight = matchWidthOrHeight;
+                scaler.referencePixelsPerUnit = referencePixelsPerUnit;
+            }
         }
 
         public void SetCanvasScaler(
@@ -96,16 +115,24 @@ namespace OSK
 
         public void ShowRayCast()
         {
-            var graphicRayCaster = Canvas.GetComponent<GraphicRaycaster>();
-            if (graphicRayCaster != null)
-                graphicRayCaster.ignoreReversedGraphics = true;
+            foreach (var canvas in RootUI.AllCanvases)
+            {
+                if (canvas == null) continue;
+                var graphicRayCaster = canvas.GetComponent<GraphicRaycaster>();
+                if (graphicRayCaster != null)
+                    graphicRayCaster.ignoreReversedGraphics = true;
+            }
         }
 
         public void HideRayCast()
         {
-            var graphicRayCaster = Canvas.GetComponent<GraphicRaycaster>();
-            if (graphicRayCaster != null)
-                graphicRayCaster.ignoreReversedGraphics = false;
+            foreach (var canvas in RootUI.AllCanvases)
+            {
+                if (canvas == null) continue;
+                var graphicRayCaster = canvas.GetComponent<GraphicRaycaster>();
+                if (graphicRayCaster != null)
+                    graphicRayCaster.ignoreReversedGraphics = false;
+            }
         }
     }
 }

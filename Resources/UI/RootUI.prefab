@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 1800635879066748726}
   - component: {fileID: 920365628998594298}
   - component: {fileID: 2992199512257234450}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: RootUI
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -92,7 +92,7 @@ GameObject:
   - component: {fileID: 1975597177786562141}
   - component: {fileID: 2774918125555136475}
   - component: {fileID: 935877131193278742}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: ScreenCanvas
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -191,7 +191,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5304447646094534799}
   - component: {fileID: 793015797466591391}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: UICamera
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -278,7 +278,7 @@ GameObject:
   - component: {fileID: 6390649988501385435}
   - component: {fileID: 588619989758358410}
   - component: {fileID: 5541227672685770778}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: LockCanvas
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -417,7 +417,7 @@ GameObject:
   - component: {fileID: 2238450710188033062}
   - component: {fileID: 2278406223300368102}
   - component: {fileID: 7118214336285542898}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: PopupCanvas
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -517,7 +517,7 @@ GameObject:
   - component: {fileID: 1944223948384106067}
   - component: {fileID: 4530463023376800315}
   - component: {fileID: 7885159626792941562}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: EventSystem
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -586,7 +586,7 @@ GameObject:
   - component: {fileID: 2648590032935546224}
   - component: {fileID: 6969884937831855083}
   - component: {fileID: 7911963171653134513}
-  m_Layer: 0
+  m_Layer: 5
   m_Name: OverlayCanvas
   m_TagString: Untagged
   m_Icon: {fileID: 0}

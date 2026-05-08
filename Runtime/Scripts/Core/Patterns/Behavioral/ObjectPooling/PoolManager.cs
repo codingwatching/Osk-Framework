@@ -215,7 +215,6 @@ namespace OSK
                 SetupInstance(key, poolInfo.DefaultParent, false);
                 poolInfo.ActiveList.Remove(key);
                 InstanceLookup.Remove(key);
-
                 poolInfo.Pool.ReleaseItem(key);
             }
         }

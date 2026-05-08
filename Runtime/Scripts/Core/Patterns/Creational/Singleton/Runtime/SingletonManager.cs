@@ -17,13 +17,10 @@ namespace OSK
         {
             get
             {
-                if (_instance == null)
-                {
-                    var go = new GameObject("SingletonManager");
-                    _instance = go.AddComponent<SingletonManager>();
-                    DontDestroyOnLoad(go);
-                }
-
+                if (_instance != null) return _instance;
+                var go = new GameObject("SingletonManager");
+                _instance = go.AddComponent<SingletonManager>();
+                DontDestroyOnLoad(go);
                 return _instance;
             }
         }
@@ -40,7 +37,7 @@ namespace OSK
         {
             if (_instance == null)
             {
-                var go = new GameObject("======= [OSK SingletonManager] ==========");
+                var go = new GameObject("====== [OSK SingletonManager] ======");
                 _instance = go.AddComponent<SingletonManager>();
                 DontDestroyOnLoad(go);
             }
@@ -92,26 +89,15 @@ namespace OSK
 
             if (_globalSingletons.TryGetValue(type, out var gInfo))
             {
-                if (gInfo.instance == null)
-                {
-                    _globalSingletons.Remove(type);
-                    return null;
-                }
-
-                return gInfo.instance as T;
+                if (gInfo.instance != null) return gInfo.instance as T;
+                _globalSingletons.Remove(type);
+                return null;
             }
-
             if (_sceneSingletons.TryGetValue(type, out var sInfo))
             {
-                if (sInfo.instance == null)
-                {
-                    _sceneSingletons.Remove(type);
-                    return null;
-                }
-
-                return sInfo.instance as T;
+                if (sInfo.instance != null) return sInfo.instance as T;
+                _sceneSingletons.Remove(type);
             }
-
             return null;
         }
 

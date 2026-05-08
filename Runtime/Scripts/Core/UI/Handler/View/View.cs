@@ -242,7 +242,14 @@ namespace OSK
 
         public void SetDepth(EViewType viewType, int depth)
         {
-            this.viewType = viewType;
+            if (this.viewType != viewType)
+            {
+                this.viewType = viewType;
+                var container = _rootUI.GetContainer(viewType);
+                if (transform.parent != container)
+                    transform.SetParent(container, false);
+            }
+
             this.depthEdit = depth;
             _rootUI.IsDirtySort = true;
             SortHierarchyByDepth();
@@ -251,15 +258,24 @@ namespace OSK
 
         private void SortHierarchyByDepth()
         {
-            var views = _rootUI.ListCacheView;
-            if (views == null || views.Count <= 1) return;
+            var parent = transform.parent;
+            if (parent == null) return;
 
-            views.Sort((a, b) => a.Depth.CompareTo(b.Depth));
-
-            for (int i = 0; i < views.Count; i++)
+            var siblings = new List<View>();
+            for (int i = 0; i < parent.childCount; i++)
             {
-                if (views[i].transform.GetSiblingIndex() != i)
-                    views[i].transform.SetSiblingIndex(i);
+                var v = parent.GetChild(i).GetComponent<View>();
+                if (v != null) siblings.Add(v);
+            }
+
+            if (siblings.Count <= 1) return;
+
+            siblings.Sort((a, b) => a.Depth.CompareTo(b.Depth));
+
+            for (int i = 0; i < siblings.Count; i++)
+            {
+                if (siblings[i].transform.GetSiblingIndex() != i)
+                    siblings[i].transform.SetSiblingIndex(i);
             }
         }
 

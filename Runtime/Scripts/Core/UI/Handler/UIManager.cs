@@ -64,6 +64,14 @@ namespace OSK
         }
 
         /// <summary>
+        /// Mở view bất đồng bộ từ Resources path.
+        /// </summary>
+        public void OpenAsync<T>(string path, object[] data = null, bool hidePrev = false, Action<T> onComplete = null) where T : View
+        {
+            RootUI.OpenAsync<T>(path, data, hidePrev, onComplete);
+        }
+
+        /// <summary>
         /// Mở view theo instance reference.
         /// </summary>
         public void Open(View view, object[] data = null, bool hidePrev = false)
@@ -94,6 +102,37 @@ namespace OSK
         {
             return RootUI.OpenAlert<T>(setup);
         }
+
+        #region Tutorial Bridge
+
+        public void ShowTutorial(params RectTransform[] targets)
+        {
+            ShowTutorial(new TutorialData(targets));
+        }
+
+        public void ShowTutorial(TutorialData data)
+        {
+            var view = RootUI.Get<TutorialView>(true);
+            if (view == null || !view.IsShowing)
+            {
+                RootUI.Open<TutorialView>(new object[] { data });
+            }
+            else
+            {
+                view.ApplyTutorialData(data);
+            }
+        }
+
+        public void HideTutorial()
+        {
+            var view = RootUI.Get<TutorialView>(true);
+            if (view != null && view.IsShowing)
+            {
+                view.Hide();
+            }
+        }
+
+        #endregion
 
         #endregion
 
@@ -161,6 +200,11 @@ namespace OSK
         public void Delete<T>(T view) where T : View
         {
             RootUI.Delete<T>(view);
+        }
+
+        public void LockInput(bool isLock)
+        {
+            RootUI.LockInput(isLock);
         }
 
         #endregion

@@ -10,12 +10,12 @@ namespace OSK
     public class TransitionUI : View
     {
         [Header("Optional UI Bindings (Inspector)")]
-        public TMP_Text loadingText;
+        public GameObject loadingText;
 
         public string preFixLoading = "Loading ";
         public Image fillImage;
 
-        [Header("Transition Settings")]
+        [Header("Transition Settings")] 
         public AnimationCurve easeCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
         public float timeTransition = 2f;
         public bool pauseTimeScale = true;
@@ -27,15 +27,6 @@ namespace OSK
 
         protected override void OnInit()
         {
-            if (loadingText == null)
-            {
-                loadingText = GetComponentInChildren<TMP_Text>();
-            }
-
-            if (fillImage == null)
-            {
-                fillImage =   GetComponentInChildren<Image>();
-            }
         }
 
         public override void Open(object[] data = null)
@@ -48,7 +39,6 @@ namespace OSK
         {
             _cts?.Cancel();
             _cts = new CancellationTokenSource();
-
             RunTransitionAsync(_cts.Token).Forget();
         }
 
@@ -82,7 +72,17 @@ namespace OSK
         {
             OnProgress?.Invoke(progress);
             if (fillImage) fillImage.fillAmount = progress;
-            if (loadingText) loadingText.text = $"{preFixLoading + Mathf.RoundToInt(progress * 100)}%";
+            if (loadingText)
+            {
+                if (loadingText.GetComponent<Text>())
+                {
+                    loadingText.GetComponent<Text>().text = $"{preFixLoading + Mathf.RoundToInt(progress * 100)}%";
+                }
+                else if (loadingText.GetComponent<TMP_Text>())
+                {
+                    loadingText.GetComponent<TMP_Text>().text = $"{preFixLoading + Mathf.RoundToInt(progress * 100)}%";
+                }
+            }
         }
 
         public override void Hide()

@@ -49,6 +49,12 @@ namespace OSK
         [Required, SerializeField] private CanvasScaler _canvasScaler;
         [SerializeField] private Transform _viewContainer;
 
+        [Title("🏗️ Containers")]
+        [SerializeField] private Transform _screenContainer;
+        [SerializeField] private Transform _popupContainer;
+        [SerializeField] private Transform _overlayContainer;
+        [SerializeField] private Transform _lockContainer;
+
         #endregion
 
         #region Settings
@@ -66,6 +72,10 @@ namespace OSK
         public CanvasScaler CanvasScaler => _canvasScaler;
         public Camera UICamera => _uiCamera;
         public Transform ViewContainer => _viewContainer;
+        public Transform ScreenContainer => _screenContainer;
+        public Transform PopupContainer => _popupContainer;
+        public Transform OverlayContainer => _overlayContainer;
+        public Transform LockContainer => _lockContainer;
         public bool IsPortrait => isPortrait;
         public bool IsDirtySort { get; set; } = true;
         #endregion
@@ -76,6 +86,8 @@ namespace OSK
             if (dontDestroyOnLoad)
                 DontDestroyOnLoad(gameObject);
 
+            EnsureContainers();
+
             var data = Main.Instance.configInit.data;
             if (data.listViewS0 != null)
             {
@@ -85,6 +97,46 @@ namespace OSK
             {
                 // check if the screen is in portrait mode
                 Main.UI.SetupCanvasScaleForRatio();
+            }
+        }
+
+        private void Update()
+        {
+#if OSK_DEBUG || UNITY_EDITOR
+            // Shortcut to open Debug View: BackQuote (~) on PC
+            if (Input.GetKeyDown(KeyCode.BackQuote))
+            {
+                ToggleDebugView();
+            }
+
+            // Shortcut on Mobile: 3 fingers long press (0.5s)
+            if (Input.touchCount == 3)
+            {
+                bool allHeld = true;
+                foreach (var touch in Input.touches)
+                {
+                    if (touch.phase != TouchPhase.Stationary) allHeld = false;
+                }
+
+                if (allHeld)
+                {
+                    // For simplicity, just check one frame for now, or you can add a timer
+                    ToggleDebugView();
+                }
+            }
+#endif
+        }
+
+        private void ToggleDebugView()
+        {
+            var debugView = Main.UI.Get<DebugView>();
+            if (debugView != null && debugView.IsShowing)
+            {
+                debugView.Hide();
+            }
+            else
+            {
+                Main.UI.Open<DebugView>();
             }
         }
 
@@ -185,7 +237,7 @@ namespace OSK
         public T SpawnViewCache<T>(T view) where T : View
         {
             // Instantiate với tham số thứ 3 = false để giữ nguyên Anchor, Position, Scale gốc của Prefab
-            var _view = Instantiate(view, _viewContainer, false);
+            var _view = Instantiate(view, GetContainer(view.viewType), false);
             _view.gameObject.SetActive(false);
             _view.Initialize(this);
 
@@ -201,7 +253,8 @@ namespace OSK
 
         public T SpawnAlert<T>(T view, bool usePool) where T : View
         {
-            T _view = usePool ? Main.Pool.Spawn<T>(KEY_POOL.KEY_UI_ALERT, view, _viewContainer) : Instantiate(view, _viewContainer, false);
+            var container = GetContainer(view.viewType);
+            T _view = usePool ? Main.Pool.Spawn<T>(KEY_POOL.KEY_UI_ALERT, view, container) : Instantiate(view, container, false);
             _view.gameObject.SetActive(true);
             _view.Initialize(this);
 
@@ -296,21 +349,53 @@ namespace OSK
         
         public void EnqueueView(View view, object[] data = null, bool hidePrevView = false)
         {
-            _queuedViews.Add(new QueuedView
-            {
-                view = view,
-                data = data,
-                hidePrevView = hidePrevView
-            });
-
-            // Sort once on insert, not in coroutine loop
-            _queuedViews.Sort((a, b) => b.view.Depth.CompareTo(a.view.Depth));
-
+            _queuedViews.Add(new QueuedView { view = view, data = data, hidePrevView = hidePrevView });
+            _queuedViews.Sort((a, b) => b.view.Priority.CompareTo(a.view.Priority));
             if (!_isProcessingQueue)
-            {
                 StartCoroutine(ProcessQueue());
-            }
         }
+
+        #region Async Loading (Resources Flow)
+
+        /// <summary>
+        /// Mở view bất đồng bộ từ Resources. Tự động khóa Input trong lúc chờ.
+        /// </summary>
+        public void OpenAsync<T>(string path, object[] data = null, bool hidePrev = false, Action<T> onComplete = null) where T : View
+        {
+            StartCoroutine(OpenAsyncRoutine<T>(path, data, hidePrev, onComplete));
+        }
+
+        private IEnumerator OpenAsyncRoutine<T>(string path, object[] data = null, bool hidePrev = false, Action<T> onComplete = null) where T : View
+        {
+            // Check cache
+            var cached = Get<T>(true);
+            if (cached != null)
+            {
+                Open(cached, data, hidePrev);
+                onComplete?.Invoke(cached);
+                yield break;
+            }
+
+            // Lock input while loading
+            LockInput(true);
+
+            ResourceRequest request = Resources.LoadAsync<GameObject>(path);
+            yield return request;
+
+            LockInput(false);
+
+            if (request.asset == null)
+            {
+                MyLogger.LogError($"[View] Async Load failed: {path}");
+                yield break;
+            }
+
+            var prefab = (request.asset as GameObject).GetComponent<T>();
+            var view = Spawn(prefab, data, hidePrev);
+            onComplete?.Invoke(view);
+        }
+
+        #endregion
         
         public void EnqueueView<T>(object[] data = null, bool hidePrev = false, Action<T> onOpened = null) where T : View
         {
@@ -439,6 +524,12 @@ namespace OSK
             view.Open(new object[] { setup });
             MyLogger.Log($"[View] Opened view: {view.name}");
             return view;
+        }
+
+        public void LockInput(bool isLock)
+        {
+            if (_lockContainer != null)
+                _lockContainer.gameObject.SetActive(isLock);
         }
 
         #endregion
@@ -716,11 +807,69 @@ namespace OSK
 
         private T SpawnFromResource<T>(string path) where T : View
         {
-            var view = Instantiate(Resources.Load<T>(path), _viewContainer);
-            if (view != null)
-                return SpawnViewCache(view);
-            MyLogger.LogError($"[View] Can't find popup with path: {path}");
-            return null;
+            var prefab = Resources.Load<T>(path);
+            if (prefab == null)
+            {
+                MyLogger.LogError($"[View] Can't find view with path: {path}");
+                return null;
+            }
+
+            var view = Instantiate(prefab, GetContainer(prefab.viewType), false);
+            return SpawnViewCache(view);
+        }
+
+        private void EnsureContainers()
+        {
+            if (_viewContainer == null) _viewContainer = transform;
+
+            _screenContainer = GetOrCreateContainer("ScreenContainer", _screenContainer);
+            _popupContainer = GetOrCreateContainer("PopupContainer", _popupContainer);
+            _overlayContainer = GetOrCreateContainer("OverlayContainer", _overlayContainer);
+            _lockContainer = GetOrCreateContainer("LockContainer", _lockContainer);
+
+            // Ensure order: Screen -> Popup -> Overlay -> Lock
+            _screenContainer.SetAsFirstSibling();
+            _popupContainer.SetSiblingIndex(1);
+            _overlayContainer.SetSiblingIndex(2);
+            _lockContainer.SetAsLastSibling();
+        }
+
+        private Transform GetOrCreateContainer(string name, Transform current)
+        {
+            if (current != null) return current;
+            var t = _viewContainer.Find(name);
+            if (t == null)
+            {
+                var go = new GameObject(name, typeof(RectTransform));
+                t = go.transform;
+                t.SetParent(_viewContainer, false);
+
+                var rt = t as RectTransform;
+                rt.anchorMin = Vector2.zero;
+                rt.anchorMax = Vector2.one;
+                rt.sizeDelta = Vector2.zero;
+                rt.anchoredPosition = Vector2.zero;
+
+                if (name == "LockContainer")
+                {
+                    var img = go.AddComponent<UnityEngine.UI.Image>();
+                    img.color = new Color(0, 0, 0, 0);
+                    img.raycastTarget = true;
+                    go.SetActive(false);
+                }
+            }
+            return t;
+        }
+
+        public Transform GetContainer(EViewType type)
+        {
+            return type switch
+            {
+                EViewType.Screen => _screenContainer,
+                EViewType.Popup => _popupContainer,
+                EViewType.Overlay => _overlayContainer,
+                _ => _viewContainer
+            };
         }
 
         private bool IsExist<T>() where T : View

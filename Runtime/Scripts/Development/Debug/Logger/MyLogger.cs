@@ -90,7 +90,7 @@ namespace OSK
             set
             {
                 _isLogEnabled = value;
-                Debug.unityLogger.logEnabled = value; // Tắt luôn log mặc định của Unity
+                //Debug.unityLogger.logEnabled = value; // Tắt luôn log mặc định của Unity
             }
         }
 

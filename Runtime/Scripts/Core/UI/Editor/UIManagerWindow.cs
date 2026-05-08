@@ -121,7 +121,8 @@ namespace OSK
         private void DrawRightPanel()
         {
             EditorGUILayout.Space(10);
-            List<DataViewUI> displayList = listViewSO.Views.Where(v => selectedType == null || (v.view != null && v.view.viewType == selectedType)).ToList();
+            List<DataViewUI> displayList = listViewSO.Views
+                .Where(v => selectedType == null || (v.view != null && v.view.viewType == selectedType)).ToList();
 
             // HEADER
             EditorGUILayout.BeginHorizontal();
@@ -152,7 +153,7 @@ namespace OSK
                 {
                     GUILayout.Label("N/A", GUILayout.Width(100));
                 }
-                
+
                 // View Object Field
                 data.view = (View)EditorGUILayout.ObjectField(data.view, typeof(View), false, GUILayout.Width(350));
 
@@ -190,7 +191,7 @@ namespace OSK
             EditorGUILayout.Space(50);
             DrawBottomTools();
         }
- 
+
 
         // ----------------------------------------
         // ADD NEW VIEW
@@ -216,9 +217,11 @@ namespace OSK
 
             GUILayout.Label("New View Draft", EditorStyles.boldLabel);
 
-            newViewDraft.view = (View)EditorGUILayout.ObjectField("View", newViewDraft.view, typeof(View), false, GUILayout.Width(500));
+            newViewDraft.view =
+                (View)EditorGUILayout.ObjectField("View", newViewDraft.view, typeof(View), false, GUILayout.Width(500));
             newViewDraft.depth = EditorGUILayout.IntField("Depth", newViewDraft.depth, GUILayout.Width(500));
-            newViewDraft.viewType = (EViewType)EditorGUILayout.EnumPopup("View Type", newViewDraft.viewType, GUILayout.Width(500));
+            newViewDraft.viewType =
+                (EViewType)EditorGUILayout.EnumPopup("View Type", newViewDraft.viewType, GUILayout.Width(500));
 
             if (newViewDraft.view != null)
             {
@@ -257,6 +260,37 @@ namespace OSK
         {
             DrawLine();
 
+            if (GUILayout.Button("Add all views in Resources", GUILayout.Width(500), GUILayout.Height(25)))
+            { 
+                var listViews = Resources.LoadAll<View>("").ToList().FindAll(x => x.isAddToViewManager);
+                if (listViews.Count == 0)
+                {
+                    OSK.MyLogger.LogWarning("No views found in Resources folder");
+                    return;
+                }
+
+                foreach (var popup in listViews)
+                {
+                    if (listViewSO.Views.Any(x => x.view == popup))
+                        continue;
+
+                    var data = new DataViewUI
+                    {
+                        view = popup,
+                        path = IOUtility.GetPathAfterResources(popup)
+                    };
+                    data.depth = popup.depthEdit;
+                    listViewSO.Views.Add(data);
+                }
+                listViewSO.Views.Sort((a, b) =>
+                {
+                    int d = a.depth.CompareTo(b.depth);
+                    return d != 0 ? d : a.view.viewType.CompareTo(b.view.viewType);
+                });
+
+                UnityEditor.EditorUtility.SetDirty(listViewSO);
+            }
+
             if (GUILayout.Button("Set Data To Prefab", GUILayout.Width(500), GUILayout.Height(25)))
             {
                 for (int i = 0; i < listViewSO.Views.Count; i++)
@@ -283,8 +317,9 @@ namespace OSK
                     if (v.view != null)
                     {
                         v.depth = v.view.depthEdit;
-                    } 
+                    }
                 }
+
                 UnityEditor.EditorUtility.SetDirty(listViewSO);
             }
 

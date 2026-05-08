@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 5599148635738714075}
   - component: {fileID: 6950495994208596016}
   m_Layer: 0
-  m_Name: TutorialView
+  m_Name: TutorialHoleView
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -64,7 +64,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   viewType: 2
-  depthEdit: 100
+  depthEdit: 0
   _priority: 0
   isAddToViewManager: 1
   isPreloadSpawn: 1
@@ -73,10 +73,10 @@ MonoBehaviour:
   _uiTransition: {fileID: 0}
   _maskImage: {fileID: 4308753902324669836}
   _pointer: {fileID: 8920928021636633916}
-  _transitionSpeed: 5
   _padding: {x: 30, y: 30}
   _cornerRadius: 25
   _showPointerThreshold: 2
+  _clickCooldown: 0.3
 --- !u!1 &7470602388878601491
 GameObject:
   m_ObjectHideFlags: 0
@@ -219,7 +219,7 @@ MonoBehaviour:
       m_Calls: []
   m_Sprite: {fileID: 0}
   m_Type: 0
-  m_PreserveAspect: 0
+  m_PreserveAspect: 1
   m_FillCenter: 1
   m_FillMethod: 4
   m_FillAmount: 1

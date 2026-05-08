@@ -107,25 +107,25 @@ namespace OSK
 
         public void ShowTutorial(params RectTransform[] targets)
         {
-            ShowTutorial(new TutorialData(targets));
+            ShowTutorial(new HoleViewData(targets));
         }
 
-        public void ShowTutorial(TutorialData data)
+        public void ShowTutorial(HoleViewData data)
         {
-            var view = RootUI.Get<TutorialView>(true);
+            var view = RootUI.Get<HoleView>(true);
             if (view == null || !view.IsShowing)
             {
-                RootUI.Open<TutorialView>(new object[] { data });
+                RootUI.Open<HoleView>(new object[] { data });
             }
             else
             {
-                view.ApplyTutorialData(data);
+                view.ApplyData(data);
             }
         }
 
         public void HideTutorial()
         {
-            var view = RootUI.Get<TutorialView>(true);
+            var view = RootUI.Get<HoleView>(true);
             if (view != null && view.IsShowing)
             {
                 view.Hide();
